@@ -87,7 +87,8 @@ public final class SourceResolver: StreamResolving, @unchecked Sendable {
             throw SourceResolutionError.noSource(song.title)
         }
         if request.purpose == .download {
-            if let stream = try await withTimeout(Self.downloadLookupTimeout, { try await self.forDownload(target, request: request) }) ?? nil {
+            // Bounded inside, so a slow addon doesn't take the answers already in hand with it.
+            if let stream = try await forDownload(target, request: request, budget: Self.downloadLookupTimeout) {
                 return stream
             }
             return try await youTube(song, request: request)
@@ -352,7 +353,12 @@ public final class SourceResolver: StreamResolving, @unchecked Sendable {
         guard target.title.nonBlank != nil, !target.isVideo else { return nil }
         let active = registry.activeForPlayback(request)
         guard let youtube = active.first(where: { $0.kind == .youtube }) else { return nil }
-        guard let (source, stream) = try await bestAcross(Self.rankedAbove(youtube.configId, active), target, request.tier, provesFirstBytes: true) else {
+        // Android 94250cce: nothing auditions this copy, so the artist must agree and the file must be
+        // big enough to hold the song (an addon's preview under a full-length row otherwise plays).
+        guard let (source, stream) = try await bestAcross(
+            Self.rankedAbove(youtube.configId, active), target, request.tier,
+            requireSharedArtist: target.artist.nonBlank != nil, provesFirstBytes: true, checkFileLength: true
+        ) else {
             return nil
         }
         SourcesLog.d("substituted: '\(target.title)' served by \(source.displayName) over YouTube at \(stream.format.summary)"
@@ -400,7 +406,8 @@ public final class SourceResolver: StreamResolving, @unchecked Sendable {
         _ target: TrackMatcher.Target,
         playing: StreamFormat?,
         servedBy: String? = nil,
-        request: StreamRequest
+        request: StreamRequest,
+        slackSec: Int = SourceResolver.upgradeDriftSec
     ) async throws -> ResolvedStream? {
         guard target.title.nonBlank != nil, target.durationSec != nil, !target.isVideo else { return nil }
         let active = registry.activeForPlayback(request)
@@ -409,6 +416,9 @@ public final class SourceResolver: StreamResolving, @unchecked Sendable {
         guard let (source, chosen) = try await bestAcross(
             candidates, target, request.tier,
             waitForAll: true, strictLength: true, requireSharedArtist: true, provesFirstBytes: true,
+            // Android a58cc106: the listener's "Track length tolerance" decides the swap's bar too,
+            // or the slider could tighten it and never loosen it.
+            driftSec: slackSec,
             patience: Self.upgradePatience,
             accept: { candidate, stream in
                 let worth = Self.worthSwapping(stream.format, playing: playing)
@@ -438,7 +448,11 @@ public final class SourceResolver: StreamResolving, @unchecked Sendable {
     /// rung, only for its best. On the best tier (High) a bit-exact answer is refused — someone who
     /// chose High chose the smaller file. Uses ``SourceRegistry/active()``, not the playback list:
     /// a download isn't budgeted by the streaming ceiling.
-    public func forDownload(_ target: TrackMatcher.Target, request: StreamRequest = .download(.lossless)) async throws -> ResolvedStream? {
+    public func forDownload(
+        _ target: TrackMatcher.Target,
+        request: StreamRequest = .download(.lossless),
+        budget: TimeInterval? = nil
+    ) async throws -> ResolvedStream? {
         guard target.title.nonBlank != nil else { return nil }
         let wantsLossless: Bool
         switch request.tier {
@@ -446,6 +460,7 @@ public final class SourceResolver: StreamResolving, @unchecked Sendable {
         case .best: wantsLossless = false
         case .capped: return nil
         }
+        let deadline = budget.map { ContinuousClock.now + .seconds($0) }
         let active = registry.active()
         // An absent (disabled) YouTube means everything enabled outranks it.
         let youtubeId = active.first { $0.kind == .youtube }?.configId ?? ""
@@ -454,23 +469,41 @@ public final class SourceResolver: StreamResolving, @unchecked Sendable {
         let bitExact = wantsLossless ? ranked.filter { $0.kind.canServeLossless } : []
         let elsewhere = ranked.filter { source in !bitExact.contains { $0 === source } }
 
+        // Android be8c5d66: on High a bit-exact answer is held in reserve rather than thrown away. Any
+        // lossy copy that beats YouTube's AAC still wins, but the user's own FLAC beats YouTube.
+        let reserve = LosslessReserve()
         // Asked now, read at the end, raced: these differ in speed by two orders of magnitude and
         // the whole lookup is on a clock.
         async let elsewhereBest = bestAcross(
             elsewhere, target, .best,
-            waitForAll: true, strictLength: strictLength,
+            waitForAll: true, strictLength: strictLength, timeout: budget,
             accept: { source, stream in
                 let ok = wantsLossless || stream.format.isLossless != true
-                if !ok { SourcesLog.d("\(source.displayName) offered \(stream.format.summary); more than this download asked for") }
+                if !ok {
+                    SourcesLog.d("\(source.displayName) offered \(stream.format.summary); more than this download asked for, kept in reserve")
+                    reserve.offer(source, stream)
+                }
                 return ok
             }
         )
 
+        // Every bit-exact source asked at once, then read in rank order: walked one at a time a slow
+        // first addon spent the whole budget, and raced a quicker FLAC from a lower rank would win.
+        let runs = bitExact.map { source in
+            (source, Task { try await self.matchAndStream(source, target, request.tier, waitForAll: true, strictLength: strictLength) })
+        }
+        defer { runs.forEach { $0.1.cancel() } }
         var best: (MusicSource, ResolvedStream)?
-        for source in bitExact {
-            guard let stream = try await matchAndStream(source, target, request.tier, waitForAll: true, strictLength: strictLength) else {
-                continue
+        for (source, run) in runs {
+            let answer: ResolvedStream??
+            if let deadline {
+                let left = max(0, ContinuousClock.now.duration(to: deadline) / .seconds(1))
+                answer = try await withTimeout(left) { try await run.value }
+                if answer == nil { SourcesLog.w("\(source.displayName) ran out of download lookup time") }
+            } else {
+                answer = try await run.value
             }
+            guard let stream = answer ?? nil else { continue }
             // Atmos is not bit-exact PCM but it is the premium rendition playback prefers.
             if stream.format.isLossless == true || stream.format.isDolbyAtmos {
                 SourcesLog.d("download: '\(target.title)' from \(source.displayName) at \(stream.format.summary)")
@@ -482,13 +515,18 @@ public final class SourceResolver: StreamResolving, @unchecked Sendable {
         if let (source, stream) = try await elsewhereBest, Self.isBetter(stream.format, than: best?.1.format) {
             best = (source, stream)
         }
-        guard let (winner, chosen) = best else { return nil }
-        guard Self.beatsYouTubeAac(chosen.format) else {
-            SourcesLog.d("best offered for '\(target.title)' is \(winner.displayName)'s \(chosen.format.summary); taking YouTube's AAC over that")
-            return nil
+        if let (winner, chosen) = best, Self.beatsYouTubeAac(chosen.format) {
+            SourcesLog.d("download: '\(target.title)' from \(winner.displayName) at \(chosen.format.summary), over YouTube's AAC")
+            return chosen
         }
-        SourcesLog.d("download: '\(target.title)' from \(winner.displayName) at \(chosen.format.summary), over YouTube's AAC")
-        return chosen
+        if let (source, stream) = reserve.held {
+            SourcesLog.d("download: '\(target.title)' from \(source.displayName) at \(stream.format.summary); nothing lossy beat YouTube")
+            return stream
+        }
+        if let (winner, chosen) = best {
+            SourcesLog.d("best offered for '\(target.title)' is \(winner.displayName)'s \(chosen.format.summary); taking YouTube's AAC over that")
+        }
+        return nil
     }
 
     /// Whether anything outranks YouTube right now — answerable from the source list alone, which
@@ -521,8 +559,11 @@ public final class SourceResolver: StreamResolving, @unchecked Sendable {
         waitForAll: Bool = false,
         strictLength: Bool = false,
         requireSharedArtist: Bool = false,
+        driftSec: Int = SourceResolver.upgradeDriftSec,
         provesFirstBytes: Bool = false,
+        checkFileLength: Bool = false,
         patience: TimeInterval? = nil,
+        timeout: TimeInterval? = nil,
         accept: @escaping @Sendable (MusicSource, ResolvedStream) -> Bool = { _, _ in true }
     ) async throws -> (MusicSource, ResolvedStream)? {
         guard !sources.isEmpty else { return nil }
@@ -541,7 +582,7 @@ public final class SourceResolver: StreamResolving, @unchecked Sendable {
                         var stream = try await self.matchAndStream(
                             source, target, tier,
                             waitForAll: waitForAll, strictLength: strictLength,
-                            requireSharedArtist: requireSharedArtist, atmosWanted: atmos
+                            requireSharedArtist: requireSharedArtist, driftSec: driftSec, checkFileLength: checkFileLength, atmosWanted: atmos
                         )
                         SourcesLog.d("\(source.displayName) answered '\(target.title)' with \(stream?.format.summary ?? "nothing") "
                             + "in \(TrackLog.ms(since: asked))ms")
@@ -564,6 +605,13 @@ public final class SourceResolver: StreamResolving, @unchecked Sendable {
                 }
             }
             defer { group.cancelAll() }
+            // Out of time decides on what has answered rather than losing it (Android be8c5d66).
+            if let timeout {
+                group.addTask {
+                    try? await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
+                    return .settle
+                }
+            }
             var best: (index: Int, stream: ResolvedStream)?
             var settling = false
             var outstanding = sources.count
@@ -607,13 +655,15 @@ public final class SourceResolver: StreamResolving, @unchecked Sendable {
         waitForAll: Bool = false,
         strictLength: Bool = false,
         requireSharedArtist: Bool = false,
+        driftSec: Int = SourceResolver.upgradeDriftSec,
+        checkFileLength: Bool = false,
         atmosWanted: Bool? = nil
     ) async throws -> ResolvedStream? {
         let atmos: Bool
         if let atmosWanted { atmos = atmosWanted } else { atmos = await environment.atmosWanted() }
         for query in TrackMatcher.queries(target) {
             guard let candidates = try await attempt(source, {
-                try await source.search(query, limit: Self.matchCandidates, waitForAll: waitForAll, tier: tier)
+                try await source.search(query, limit: Self.matchCandidates, waitForAll: waitForAll, tier: tier, target: target)
             }) else { return nil }
             var matches = TrackMatcher.ranked(candidates, target)
             if requireSharedArtist {
@@ -633,12 +683,25 @@ public final class SourceResolver: StreamResolving, @unchecked Sendable {
             }
             // Standing in for one specific recording: the same length to the second or so.
             if strictLength {
-                matches = matches.filter { TrackMatcher.withinSeconds($0, target, Self.upgradeDriftSec) }
+                let refused = matches.filter { !TrackMatcher.withinSeconds($0, target, driftSec) }
+                // Named: a copy refused for its length otherwise reads like a source that never had it.
+                if !refused.isEmpty {
+                    SourcesLog.d("\(source.displayName): \(refused.count) match(es) for '\(target.title)' outside ±\(driftSec)s of "
+                        + "\(target.durationSec.map(String.init) ?? "?")s: " + refused.map { "'\($0.title)' \($0.durationText ?? "?")" }.joined(separator: ", "))
+                }
+                matches = matches.filter { TrackMatcher.withinSeconds($0, target, driftSec) }
             } else if !target.isVideo {
                 matches = matches.filter { Self.mayStartSongRow($0, target, from: source) }
             }
             if matches.isEmpty { continue }
-            return try await streamBest(source, matches, target, tier, atmosWanted: atmos)
+            return try await streamBest(
+                source, matches, target, tier,
+                // The tolerance already decided which runtimes are one recording; a fixed 3 s would undo a setting of 5.
+                sameLengthSec: strictLength ? max(Self.sameRecordingSec, driftSec) : Self.sameRecordingSec,
+                // Only the patient lookups can afford to open more than one row.
+                compareRows: waitForAll,
+                checkFileLength: checkFileLength, atmosWanted: atmos
+            )
         }
         return nil
     }
@@ -664,11 +727,19 @@ public final class SourceResolver: StreamResolving, @unchecked Sendable {
         _ matches: [Song],
         _ target: TrackMatcher.Target,
         _ tier: StreamRequest.Tier,
+        sameLengthSec: Int = SourceResolver.sameRecordingSec,
+        compareRows: Bool = false,
+        checkFileLength: Bool = false,
         atmosWanted: Bool
     ) async throws -> ResolvedStream? {
         let wantsLossless = tier == .lossless
         var settleFor: ResolvedStream?
-        for match in Self.preferred(matches, target: target, wantsLossless: wantsLossless, atmosWanted: atmosWanted).prefix(Self.streamAttempts) {
+        var best: ResolvedStream?
+        let ordered = Self.preferred(matches, target: target, wantsLossless: wantsLossless, atmosWanted: atmosWanted, sameLengthSec: sameLengthSec)
+        for match in ordered.prefix(Self.streamAttempts) {
+            // Android a58cc106: past the first answer only another lossless row could beat it (the
+            // row says lossless, only the stream says 24-bit); nothing beats an immersive one.
+            if let held = best, held.format.isDolbyAtmos || match.sourceQuality != .lossless { break }
             let trackId = SourceRegistry.parseTrackKey(match.videoId)?.trackId ?? match.videoId
             guard var stream = try await attempt(source, { try await source.stream(trackId: trackId, tier: tier) }) else {
                 SourcesLog.d("\(source.displayName) has no stream for '\(match.title)' (\(trackId)); trying its next match, if any")
@@ -677,19 +748,23 @@ public final class SourceResolver: StreamResolving, @unchecked Sendable {
             // The row knows how long the recording is; the URL doesn't.
             stream.durationSeconds = TrackMatcher.secondsOf(match.durationText) ?? stream.durationSeconds
             stream.sourceConfigId = source.configId
+            // Dropped, not kept as a floor: a clip is not a lesser copy of the recording.
+            if checkFileLength, await cutShort(source, match, stream, target) { continue }
             let served = stream.format
             let row = "'\(match.title)' by '\(match.artist)' id='\(match.videoId)' album='\(match.albumName ?? "?")' "
                 + "duration=\(match.durationText ?? "?") row=\(target.durationSec.map(TrackMatcher.durationText) ?? "?") "
                 + "explicit=\(match.isExplicit.map(String.init) ?? "?")"
             if !wantsLossless || served.isLossless == true || served.isDolbyAtmos || Self.statesNothingLossy(served) {
                 SourcesLog.d("\(source.displayName) matched \(row) → \(served.summary)")
-                return stream
+                if !compareRows { return stream }
+                if Self.isBetter(stream.format, than: best?.format) { best = stream }
+                continue
             }
             SourcesLog.d("\(source.displayName) offered \(served.summary) for \(row); looking further")
             stream.belowRequest = true
             if settleFor == nil || Self.isBetter(stream.format, than: settleFor!.format) { settleFor = stream }
         }
-        return settleFor
+        return best ?? settleFor
     }
 
     /// Whether `stream`'s server starts sending audio within ``firstBytesTimeout``: one small range
@@ -711,6 +786,18 @@ public final class SourceResolver: StreamResolving, @unchecked Sendable {
             return false
         }
         return sounded ?? false
+    }
+
+    /// Whether the file behind `stream` is too small to hold the recording (Android 94250cce
+    /// `cutShort`). Answers no whenever it can't measure.
+    private func cutShort(_ source: MusicSource, _ match: Song, _ stream: ResolvedStream, _ target: TrackMatcher.Target) async -> Bool {
+        guard let expectedSec = target.durationSec ?? TrackMatcher.secondsOf(match.durationText),
+              let bytes = await StreamLengthProbe.bytesOf(stream, session: environment.session, timeout: Self.firstBytesTimeout),
+              StreamLengthProbe.tooShort(bytes: bytes, format: stream.format, expectedSec: expectedSec, slackSec: Self.startDriftSec)
+        else { return false }
+        SourcesLog.w("\(source.displayName) served \(bytes / 1_024)kB of \(stream.format.summary) for '\(match.title)', "
+            + "too little to hold \(expectedSec)s; a preview or a cut-off file, looking further")
+        return true
     }
 
     /// Runs `block`, turning a failure into nil and a log line: a source that throws costs the
@@ -747,8 +834,9 @@ public final class SourceResolver: StreamResolving, @unchecked Sendable {
     /// when immersive audio is wanted, the Atmos row first — a catalogue may publish the mix as its
     /// own row, and picking the row is the only way to hear it. Then lossless between equals.
     /// Stable throughout, so the matcher's confidence order survives inside each tier.
-    public static func preferred(_ matches: [Song], target: TrackMatcher.Target, wantsLossless: Bool, atmosWanted: Bool) -> [Song] {
-        let sameLength = matches.filter { TrackMatcher.withinSeconds($0, target, sameRecordingSec) }
+    public static func preferred(_ matches: [Song], target: TrackMatcher.Target, wantsLossless: Bool, atmosWanted: Bool,
+                                 sameLengthSec: Int = sameRecordingSec) -> [Song] {
+        let sameLength = matches.filter { TrackMatcher.withinSeconds($0, target, sameLengthSec) }
         let eligible = sameLength.isEmpty ? matches : sameLength
         if atmosWanted, let immersive = SourceQuality.immersive {
             let immersiveFirst = eligible.filter { $0.sourceQuality == immersive } + eligible.filter { $0.sourceQuality != immersive }
@@ -765,6 +853,12 @@ public final class SourceResolver: StreamResolving, @unchecked Sendable {
         guard let current else { return true }
         if candidate.isDolbyAtmos != current.isDolbyAtmos { return candidate.isDolbyAtmos }
         if candidate.isLossless != current.isLossless { return candidate.isLossless == true }
+        // Android a58cc106: between two lossless copies, depth then rate; a FLAC's bitrate only says
+        // how compressible the recording was, so a 24/192 and a 16/44.1 used to tie.
+        if candidate.isLossless == true {
+            if (candidate.bitDepth ?? 0) != (current.bitDepth ?? 0) { return (candidate.bitDepth ?? 0) > (current.bitDepth ?? 0) }
+            if (candidate.sampleRateHz ?? 0) != (current.sampleRateHz ?? 0) { return (candidate.sampleRateHz ?? 0) > (current.sampleRateHz ?? 0) }
+        }
         return (candidate.kbps ?? 0) > (current.kbps ?? 0)
     }
 
@@ -811,14 +905,14 @@ public final class SourceResolver: StreamResolving, @unchecked Sendable {
     /// Matching rows worth actually opening (each is a round trip).
     static let streamAttempts = 3
     /// How far a replacement's runtime may sit from the playing track's: rounding, nothing else.
-    static let upgradeDriftSec = 2
+    public static let upgradeDriftSec = 2
     /// How far a copy's stated length may sit from a song row's and still start it. Measured against
     /// the add-ons on 222 tracks: 3 s turned away right masters with no nearer copy, and 4 s turned
     /// away a 3:30 row whose add-on copies run 3:25. The other versions 5 s off sit on rows with a nearer copy the matcher prefers;
     /// from 6 s up what comes in is mostly tributes, covers and other versions.
     static let startDriftSec = 5
     /// How close two runtimes have to be to be the same cut of a song.
-    static let sameRecordingSec = 3
+    public static let sameRecordingSec = 3
     /// The top of YouTube's AAC ladder (itag 141 at 256 kbps signed in).
     static let youTubeBestAacKbps = 256
     /// Sized off the two rates this decides between: YouTube around 160, a lossy module tier 320.
@@ -848,4 +942,20 @@ public final class SourceResolver: StreamResolving, @unchecked Sendable {
     static let substituteTimeout: TimeInterval = 20
     /// Android `Downloads.SOURCE_LOOKUP_MS`.
     static let downloadLookupTimeout: TimeInterval = 60
+}
+
+/// The first bit-exact copy a High-rung download refused, kept for when nothing lossy beats YouTube.
+private final class LosslessReserve: @unchecked Sendable {
+    private let lock = NSLock()
+    private var first: (MusicSource, ResolvedStream)?
+
+    func offer(_ source: MusicSource, _ stream: ResolvedStream) {
+        lock.lock(); defer { lock.unlock() }
+        if first == nil { first = (source, stream) }
+    }
+
+    var held: (MusicSource, ResolvedStream)? {
+        lock.lock(); defer { lock.unlock() }
+        return first
+    }
 }

@@ -217,6 +217,11 @@ public final class SourceRegistry {
             config.kind = .addon
             config.baseUrl = baseUrl
             config.label = manifest.displayName
+            config.qualityOptions = manifest.qualityOptions
+            // The address may now name a different addon, whose list this pick was never on.
+            if let picked = config.pickedQuality, !manifest.qualityOptions.contains(where: { $0.value == picked }) {
+                config.pickedQuality = nil
+            }
             return config
         case .moduleIndex(_, let indexUrl):
             guard var config = existing, config.kind == .customModule else {
@@ -294,11 +299,12 @@ public final class SourceRegistry {
         for config in configs where config.kind.needsServer && config.isComplete {
             guard let source = instance(config.id) else { continue }
             results[config.id] = await source.health()
-            if let addon = source as? AddonSource, let named = await addon.manifestName(),
-               let current = self.configs.first(where: { $0.id == config.id }), named != current.label {
-                var renamed = current
-                renamed.label = named
-                update(renamed)
+            if let addon = source as? AddonSource,
+               let current = self.configs.first(where: { $0.id == config.id }) {
+                var refreshed = current
+                if let named = await addon.manifestName() { refreshed.label = named }
+                if let options = await addon.manifestQualityOptions() { refreshed.qualityOptions = options }
+                if refreshed != current { update(refreshed) }
             }
         }
         return results

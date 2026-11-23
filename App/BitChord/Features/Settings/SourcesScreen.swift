@@ -132,7 +132,8 @@ struct SourcesList: View {
                 get: { config.enabled },
                 set: { on in if model.setEnabled(config, on) { confirmJioSaavn = true } }
             ) : nil,
-            onEdit: SourcesModel.isEditable(config) ? { editing = config } : nil
+            onEdit: SourcesModel.isEditable(config) ? { editing = config } : nil,
+            onPickQuality: { model.pickQuality(config, $0) }
         )
     }
 }
@@ -148,11 +149,43 @@ private struct SourceRow: View {
     let dimmed: Bool
     let isOn: Binding<Bool>?
     let onEdit: (() -> Void)?
+    let onPickQuality: (String) -> Void
     @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            mainLine
+            // Outside the combined row element, so VoiceOver reaches the menu on its own.
+            if config.kind == .addon, config.isComplete, let active = config.activeQuality {
+                qualityMenu(active)
+                    .padding(.leading, 24 + SettingsMetrics.textInset)
+            }
+        }
+        .frame(minHeight: 40)
+        // Android's source rows: 60 pt tall, 10 above and below.
+        .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 10, trailing: 16))
+    }
+
+    /// The addon's own quality list, read off the stored manifest so it can be set while the addon
+    /// is down. One line whatever the label's length; the full labels are in the menu.
+    private func qualityMenu(_ active: AddonQualityOption) -> some View {
+        Menu {
+            Picker(L10n.audioQuality, selection: Binding(get: { active.value }, set: onPickQuality)) {
+                ForEach(config.qualityOptions, id: \.value) { option in
+                    Text(option.label).tag(option.value)
+                }
+            }
+        } label: {
+            Label(active.label, systemImage: "slider.horizontal.3")
+                .font(.footnote)
+                .lineLimit(1)
+        }
+        .accessibilityLabel("\(L10n.audioQuality), \(active.label)")
+    }
+
+    private var mainLine: some View {
         let large = typeSize.isAccessibilitySize
-        HStack(spacing: 0) {
+        return HStack(spacing: 0) {
             HStack(spacing: 0) {
                 Text("\(position)")
                     .foregroundStyle(.secondary)
@@ -193,9 +226,6 @@ private struct SourceRow: View {
                     .foregroundStyle(.secondary)
             }
         }
-        .frame(minHeight: 40)
-        // Android's source rows: 60 pt tall, 10 above and below.
-        .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 10, trailing: 16))
     }
 
     private var symbol: String {

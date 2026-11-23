@@ -71,6 +71,23 @@ final class TrackMatcherTests: XCTestCase {
         XCTAssertTrue(TrackMatcher.sharesArtist("비", "비"), "a one-syllable Korean name is a real credit")
     }
 
+    // Android c61fa96c (TrackMatcherAccentsTest).
+    func testATurkishTitleMatchesItsUnaccentedUpload() {
+        XCTAssertTrue(matches(song("Simarik", "Tarkan"), "Şımarık", "Tarkan"))
+        XCTAssertTrue(matches(song("Şımarık", "Tarkan"), "Simarik", "Tarkan"))
+        XCTAssertFalse(matches(song("Kuzu Kuzu", "Tarkan"), "Şımarık", "Tarkan"))
+    }
+
+    func testAnAccentedArtistMatchesItsUnaccentedSpelling() {
+        XCTAssertTrue(matches(song("Nilüfer", "Muslum Gurses"), "Nilüfer", "Müslüm Gürses"))
+    }
+
+    func testFoldingLeavesOtherScriptsMarksAlone() {
+        XCTAssertNotEqual(TrackMatcher.foldLatin("दिल"), TrackMatcher.foldLatin("दल"))
+        XCTAssertEqual(TrackMatcher.foldLatin("밤소풍"), "밤소풍")
+        XCTAssertFalse(matches(song("다른 노래", "스텔라장"), "밤소풍", "스텔라장"))
+    }
+
     func testAcceptsASharedArtistWhenCataloguesCreditDifferently() {
         XCTAssertTrue(matches(song("Numb / Encore", "Jay-Z & Linkin Park"), "Numb / Encore", "Linkin Park"))
     }

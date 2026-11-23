@@ -31,9 +31,10 @@ public final class AddonSource: MusicSource, @unchecked Sendable {
         self.config = config
         sourceConfig = config
         self.environment = environment
+        // Holds the pick for this instance's life: changing it is an edit, and the registry rebuilds on one.
         client = AddonClient(baseUrl: config.baseUrl, session: environment.session, atmosWanted: {
             await environment.atmosWanted()
-        })
+        }, pickedQuality: config.pickedQuality)
     }
 
     // MARK: Health
@@ -79,16 +80,26 @@ public final class AddonSource: MusicSource, @unchecked Sendable {
         (try? await client.manifest().get())?.displayName.nonBlank
     }
 
+    /// The quality choices the manifest lists, or nil when it can't be read. Free after ``health()``.
+    public func manifestQualityOptions() async -> [AddonQualityOption]? {
+        (try? await client.manifest().get())?.qualityOptions
+    }
+
     // MARK: Search
 
     /// One request, one catalogue, in the order the addon returned it. `waitForAll` means nothing
     /// here (one HTTP round trip). The tier is the stream's when a stream is what this is for, and
     /// lossless for the search box.
     public func search(_ query: String, limit: Int, waitForAll: Bool, tier: StreamRequest.Tier?) async throws -> [Song] {
+        try await search(query, limit: limit, waitForAll: waitForAll, tier: tier, target: nil)
+    }
+
+    public func search(_ query: String, limit: Int, waitForAll: Bool, tier: StreamRequest.Tier?, target: TrackMatcher.Target?) async throws -> [Song] {
         if query.nonBlank == nil { return [] }
         let tierName = tier.map(ModuleSource.tierName) ?? AddonClient.tierLossless
         let tracks: [AddonTrack]
-        switch await client.search(query, tier: tierName) {
+        // The track's own metadata, not the query's folded words.
+        switch await client.search(query, tier: tierName, title: target?.title ?? "", artist: target?.artist ?? "") {
         case .success(let found):
             tracks = found
         case .failure(let failure):

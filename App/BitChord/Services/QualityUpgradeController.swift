@@ -58,11 +58,15 @@ final class SourceUpgradeSearch: QualityUpgradeSearching, @unchecked Sendable {
     private let resolver: SourceResolver
     private let registry: SourceRegistry
     private let request: @Sendable () -> StreamRequest
+    /// Settings' "Track length tolerance", for the swap's length bar (Android a58cc106 `upgradeSlackSec`).
+    private let slackSec: @Sendable () async -> Int
 
-    init(resolver: SourceResolver, registry: SourceRegistry, request: @escaping @Sendable () -> StreamRequest) {
+    init(resolver: SourceResolver, registry: SourceRegistry, request: @escaping @Sendable () -> StreamRequest,
+         slackSec: @escaping @Sendable () async -> Int = { SourceResolver.upgradeDriftSec }) {
         self.resolver = resolver
         self.registry = registry
         self.request = request
+        self.slackSec = slackSec
     }
 
     func clearCompletedAnswers() async {
@@ -85,7 +89,8 @@ final class SourceUpgradeSearch: QualityUpgradeSearching, @unchecked Sendable {
     ) async throws -> ResolvedStream? {
         let matcherTarget = TrackMatcher.Target(target.title, target.artist, durationSec: target.durationSec, album: target.album,
                                                 isExplicit: target.isExplicit, isVideo: target.isVideo)
-        guard let found = try await resolver.upgradeFor(matcherTarget, playing: format, servedBy: servedBy, request: request()) else { return nil }
+        guard let found = try await resolver.upgradeFor(matcherTarget, playing: format, servedBy: servedBy, request: request(),
+                                                        slackSec: await slackSec()) else { return nil }
         return isWorthSwapping(found) ? found : nil
     }
 }

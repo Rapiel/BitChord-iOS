@@ -753,6 +753,39 @@ final class SourceResolverTests: XCTestCase {
         XCTAssertEqual(high?.format.kbps, 320, "High keeps JioSaavn's 320 and refuses the FLAC")
     }
 
+    /// Android a58cc106: between two lossless copies depth, then rate, decides; bitrate doesn't.
+    func testBetweenLosslessCopiesDepthThenRateDecides() {
+        let cd = StreamFormat(codec: "flac", kbps: 1_100, sampleRateHz: 44_100, bitDepth: 16)
+        let hiRes = StreamFormat(codec: "flac", kbps: 900, sampleRateHz: 96_000, bitDepth: 24)
+        XCTAssertTrue(SourceResolver.isBetter(hiRes, than: cd))
+        XCTAssertFalse(SourceResolver.isBetter(cd, than: hiRes))
+        let cd48 = StreamFormat(codec: "flac", sampleRateHz: 48_000, bitDepth: 16)
+        XCTAssertTrue(SourceResolver.isBetter(cd48, than: cd))
+    }
+
+    /// Android be8c5d66: on High a FLAC is held in reserve, and beats YouTube when nothing lossy does.
+    @MainActor
+    func testHighKeepsALosslessFileOverYouTubeWhenNothingLossyIsOffered() async throws {
+        let addon = FakeSource("addon", after: 0, format: StreamFormat(codec: "flac"), kind: .addon)
+        let (resolver, registry) = resolver([addon])
+        seed(registry, [addon])
+        let high = try await resolver.forDownload(raceTarget(), request: .download(.high))
+        XCTAssertEqual(high?.format.codec, "flac")
+    }
+
+    /// Android be8c5d66: out of time, the download decides on the answers it has.
+    @MainActor
+    func testADownloadOutOfTimeKeepsTheAnswersInHand() async throws {
+        let slow = FakeSource("addon", after: 5_000, format: StreamFormat(codec: "flac"), kind: .addon)
+        let quick = FakeSource("jio", after: 0, format: StreamFormat(codec: "mp4", kbps: 320), kind: .jioSaavn)
+        let (resolver, registry) = resolver([slow, quick])
+        seed(registry, [slow, quick])
+        let started = Date()
+        let stream = try await resolver.forDownload(raceTarget(), request: .download(.lossless), budget: 0.3)
+        XCTAssertEqual(stream?.format.kbps, 320)
+        XCTAssertLessThan(Date().timeIntervalSince(started), 2)
+    }
+
     @MainActor
     func testADownloadFallsToYouTubeWhenNothingBeatsItsAac() async throws {
         let thin = FakeSource("jio", after: 0, format: StreamFormat(codec: "mp4", kbps: 160), kind: .jioSaavn)

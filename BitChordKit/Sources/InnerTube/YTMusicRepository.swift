@@ -240,12 +240,16 @@ public final class YTMusicRepository: Sendable {
     }
 
     /// Live media results for the typeahead phase, so the dropdown can show playable cards beside
-    /// the text completions. Deliberately unauthenticated (see
-    /// ``InnerTubeClient/searchTypeahead(_:)``); confirmed searches go through
-    /// ``searchPage(query:filter:)`` and are recorded properly.
+    /// the text completions. Neither call files the keystroke in the account's search history;
+    /// confirmed searches go through ``searchPage(query:filter:)`` and are recorded properly.
     public func searchTypeahead(input: String) async throws -> InnerTubeParser.SearchPage {
         try await call("typeahead") {
-            Self.deduplicated(InnerTubeParser.parseSearchPage(try await self.client.searchTypeahead(input), includeVideos: false))
+            // Android 25841a57: the suggestions endpoint, signed in, carries cards ranked by this
+            // account's listening without filing the keystroke in its history; the anonymous search
+            // only fills in when it has none.
+            let cards = Self.deduplicated(InnerTubeParser.parseSearchPage(try await self.client.searchSuggestions(input), includeVideos: false))
+            if !cards.rows.isEmpty { return InnerTubeParser.SearchPage(rows: cards.rows, continuation: nil) }
+            return Self.deduplicated(InnerTubeParser.parseSearchPage(try await self.client.searchTypeahead(input), includeVideos: false))
         }
     }
 

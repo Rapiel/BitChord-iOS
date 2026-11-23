@@ -34,6 +34,8 @@ final class AddonClient: @unchecked Sendable {
 
     private let session: URLSession
     private let atmosWanted: @Sendable () async -> Bool
+    /// The `quality` value the listener chose for this addon, or nil for its first listed option.
+    private let pickedQuality: String?
     private let manifests: SharedCalls<AddonManifest>
     private let searches: SharedCalls<AddonSearchResponse>
     private let streams: SharedCalls<AddonStream>
@@ -52,8 +54,10 @@ final class AddonClient: @unchecked Sendable {
     init(
         baseUrl rawBaseUrl: String,
         session: URLSession,
-        atmosWanted: @escaping @Sendable () async -> Bool
+        atmosWanted: @escaping @Sendable () async -> Bool,
+        pickedQuality: String? = nil
     ) {
+        self.pickedQuality = pickedQuality
         baseUrl = Self.normalizeBase(rawBaseUrl)
         self.session = session
         self.atmosWanted = atmosWanted
@@ -105,11 +109,15 @@ final class AddonClient: @unchecked Sendable {
     // MARK: Search and stream
 
     /// Tracks the addon holds for `query`. The protocol has no limit parameter; trimming is the
-    /// caller's job.
-    func search(_ query: String, tier: String) async -> Result<[AddonTrack], Error> {
+    /// caller's job. `title` and `artist`, when known, go along beside `q` so an addon can tell
+    /// which words name the singer (Android 7203588d); an addon that does not read them ignores them.
+    func search(_ query: String, tier: String, title: String = "", artist: String = "") async -> Result<[AddonTrack], Error> {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty { return .success([]) }
         let params = await settings(for: tier)
+            + [("title", title), ("artist", artist)]
+                .map { ($0.0, $0.1.trimmingCharacters(in: .whitespacesAndNewlines)) }
+                .filter { !$0.1.isEmpty }
         guard let url = endpoint(["search"], params + [("q", trimmed)]) else {
             return .failure(AddonError.rejected("That is not a usable address"))
         }
@@ -173,7 +181,8 @@ final class AddonClient: @unchecked Sendable {
            Date().timeIntervalSince(memo.at) < Self.settingsMemoLifetime {
             return memo.params
         }
-        let declared = (try? await manifest().get())?.settings ?? []
+        let manifest = try? await manifest().get()
+        let declared = manifest?.settings ?? []
         var params: [(String, String)] = []
         func set(_ key: String, _ value: String) {
             if let index = params.firstIndex(where: { $0.0 == key }) {
@@ -188,7 +197,18 @@ final class AddonClient: @unchecked Sendable {
         }
         if tier.nonBlank != nil {
             let options = declared.first { $0.key == Self.qualityKey }?.options ?? []
-            set(Self.qualityKey, Self.matchTier(tier, options: options) ?? tier)
+            // Android 2fe5f3c7: asking for the best, send the listener's pick (or the first option);
+            // a lower tier is a cost setting the pick does not overrule. A pick the addon stopped
+            // listing would land on its fallback; with no manifest there is nothing to judge it by.
+            let chosen: String?
+            if tier.caseInsensitiveCompare(Self.tierLossless) != .orderedSame {
+                chosen = Self.matchTier(tier, options: options)
+            } else if manifest == nil {
+                chosen = pickedQuality
+            } else {
+                chosen = pickedQuality.flatMap { options.contains($0) ? $0 : nil } ?? options.first
+            }
+            set(Self.qualityKey, chosen ?? tier)
         }
         quietLock.withLock { settingsMemo[tier] = (Date(), params) }
         return params

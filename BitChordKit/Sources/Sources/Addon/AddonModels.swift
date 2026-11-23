@@ -51,6 +51,17 @@ public struct AddonManifest: Decodable, Hashable, Sendable {
     /// `stream` can still play, and an empty `resources` is silence rather than a claim.
     public var isPlayable: Bool { resources.isEmpty || declares("search") }
 
+    /// The renditions the listener can choose between, from a declared `quality` select. Empty when
+    /// there is no choice to offer: no such setting, or fewer than two usable values.
+    public var qualityOptions: [AddonQualityOption] {
+        guard let setting = settings.first(where: { $0.key == "quality" }) else { return [] }
+        var seen = Set<String>()
+        let options = zip(setting.options, setting.optionLabels)
+            .filter { seen.insert($0.0).inserted }
+            .map { AddonQualityOption(value: $0.0, label: $0.1) }
+        return options.count > 1 ? options : []
+    }
+
     /// What to show when the user did not name the addon themselves.
     public var displayName: String { name.nonBlank ?? id }
 }
@@ -61,14 +72,20 @@ struct AddonSetting: Decodable, Hashable, Sendable {
     var key: String
     var defaultValue: String?
     var options: [String]
+    /// Parallel to `options`: each option's label, or its value when it has none.
+    var optionLabels: [String]
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: AnyCodingKey.self)
         key = c.lenientString("key") ?? ""
         defaultValue = c.json("default")?.queryValue
-        options = c.lenientArray("options", of: JSONValue.self).compactMap { option in
-            option.objectValue?["value"]?.queryValue
+        let pairs: [(String, String)] = c.lenientArray("options", of: JSONValue.self).compactMap { option in
+            guard let value = option.objectValue?["value"]?.queryValue else { return nil }
+            // An odd label costs the label, not the option.
+            return (value, option.objectValue?["label"]?.queryValue?.nonBlank ?? value)
         }
+        options = pairs.map(\.0)
+        optionLabels = pairs.map(\.1)
     }
 }
 

@@ -296,7 +296,7 @@ public enum TrackMatcher {
         while words.count > 1, let last = words.last, trailingNoise.contains(last) {
             words.removeLast()
         }
-        return TitleParts(words: words, core: words.joined(), versions: versions.sorted(), context: context)
+        return TitleParts(words: words, core: foldLatin(words.joined()), versions: versions.sorted(), context: context)
     }
 
     /// Files one dropped segment under versions or context. A segment naming a take is identity;
@@ -343,12 +343,37 @@ public enum TrackMatcher {
     /// "AR Rahman".
     static func artistNames(_ value: String) -> Set<[String]> {
         Set(
-            artistSeparators.split(value.precomposedStringWithCompatibilityMapping.lowercased())
+            artistSeparators.split(foldLatin(value.precomposedStringWithCompatibilityMapping.lowercased()))
                 .map { name in
                     wordSplit.split(name).map { nonAlnum.replacing(in: $0, with: "") }.filter { $0.count > 1 || $0.unicodeScalars.contains { $0.value > 127 } }
                 }
                 .filter { !$0.isEmpty }
         )
+    }
+
+    /// Latin letters without their accents, for comparing only (Android c61fa96c): "Şımarık" and the
+    /// "Simarik" an upload without a Turkish keyboard files it under are one title. Turkish dotless ı
+    /// has no decomposition, so it is mapped by hand. Latin only: other scripts carry vowels as
+    /// combining marks (Hindi matras, Hangul jamo), and dropping those would make different words equal.
+    static func foldLatin(_ text: String) -> String {
+        var out = String.UnicodeScalarView()
+        for scalar in text.unicodeScalars {
+            if scalar == "ı" { out.append("i"); continue }
+            guard scalar.value >= 0x80, isLatin(scalar) else { out.append(scalar); continue }
+            for part in String(scalar).decomposedStringWithCanonicalMapping.unicodeScalars
+            where part.properties.generalCategory != .nonspacingMark {
+                out.append(part)
+            }
+        }
+        return String(out)
+    }
+
+    // shortcut: Foundation exposes no Unicode script property, so Latin is these blocks; extend if a Latin letter outside them shows up.
+    private static func isLatin(_ scalar: Unicode.Scalar) -> Bool {
+        switch scalar.value {
+        case 0x00C0...0x024F, 0x1E00...0x1EFF, 0x2C60...0x2C7F, 0xA720...0xA7FF, 0xAB30...0xAB6F: return true
+        default: return false
+        }
     }
 
     private static func sameArtist(_ a: [String], _ b: [String]) -> Bool { runOf(a, b) || runOf(b, a) }

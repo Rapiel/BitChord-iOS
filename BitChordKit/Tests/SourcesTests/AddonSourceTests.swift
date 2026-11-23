@@ -190,6 +190,25 @@ final class AddonSourceTests: XCTestCase {
         XCTAssertTrue(songs[0].videoId.hasSuffix("::t1"))
     }
 
+    // Android 7203588d.
+    func testASearchForAKnownTrackSendsItsTitleAndArtistApartFromQ() async throws {
+        server.route("/manifest.json", manifest())
+        server.route("/search", .json(#"{"tracks":[]}"#))
+        _ = try await source().search("it might be you ian kiong", limit: 5, waitForAll: false, tier: nil,
+                                      target: TrackMatcher.Target("It Might Be You", "Ian Kiong"))
+        XCTAssertEqual(server.query("q", of: "/search"), "it might be you ian kiong")
+        XCTAssertEqual(server.query("title", of: "/search"), "It Might Be You")
+        XCTAssertEqual(server.query("artist", of: "/search"), "Ian Kiong")
+    }
+
+    func testATypedSearchSendsNoTitleOrArtist() async throws {
+        server.route("/manifest.json", manifest())
+        server.route("/search", .json(#"{"tracks":[]}"#))
+        _ = try await source().search("it might be you", limit: 5)
+        XCTAssertNil(server.query("title", of: "/search"))
+        XCTAssertNil(server.query("artist", of: "/search"))
+    }
+
     func testSearchDropsRowsWithNoIdOrNoTitle() async throws {
         server.route("/manifest.json", manifest())
         server.route("/search", .json(#"{"tracks":[{"id":"","title":"No id"},{"id":"t","title":""},{"id":"ok","title":"Fine"}]}"#))
@@ -260,6 +279,44 @@ final class AddonSourceTests: XCTestCase {
         XCTAssertEqual(server.query("region", of: "/search"), "US")
         XCTAssertEqual(server.query("preferOpus", of: "/search"), "true")
         XCTAssertEqual(server.query("quality", of: "/search"), "lossless")
+    }
+
+    // Android 2fe5f3c7: the listener's pick goes with the top tier; a capped tier still matches.
+    private func qualityManifest() -> URLProtocolStub.Response {
+        .json("""
+        {"id":"a","name":"A","resources":["search","stream"],
+         "settings":[{"key":"quality","type":"select","default":"lossless",
+           "options":[{"value":"lossless","label":"CD"},{"value":"hires","label":"Hi-Res"},{"value":"low"}]}]}
+        """)
+    }
+
+    func testAPickedQualityIsSentForTheTopTierButNotForACappedOne() async throws {
+        server.route("/manifest.json", qualityManifest())
+        server.route("/search", .json(#"{"tracks":[]}"#))
+        server.route("/stream/t1", .json(#"{"url":"https://cdn.test/a.mp3"}"#))
+        let picked = AddonSource(config: SourceConfig(kind: .addon, baseUrl: FakeAddonServer.base, pickedQuality: "hires"),
+                                 environment: environment())
+        _ = try await picked.search("x", limit: 5)
+        _ = try await picked.stream(trackId: "t1", tier: .capped(kbps: 64))
+        XCTAssertEqual(server.query("quality", of: "/search"), "hires")
+        XCTAssertEqual(server.query("quality", of: "/stream/t1"), "low")
+    }
+
+    func testAPickTheAddonNoLongerListsFallsBackToItsFirstOption() async throws {
+        server.route("/manifest.json", qualityManifest())
+        server.route("/search", .json(#"{"tracks":[]}"#))
+        let stale = AddonSource(config: SourceConfig(kind: .addon, baseUrl: FakeAddonServer.base, pickedQuality: "gone"),
+                                environment: environment())
+        _ = try await stale.search("x", limit: 5)
+        XCTAssertEqual(server.query("quality", of: "/search"), "lossless")
+    }
+
+    func testTheManifestOffersAQualityChoiceOnlyWithTwoOrMoreOptions() throws {
+        let decoder = JSONDecoder()
+        let many = try decoder.decode(AddonManifest.self, from: Data(#"{"id":"a","settings":[{"key":"quality","options":[{"value":"lossless","label":"CD"},{"value":"hires"}]}]}"#.utf8))
+        XCTAssertEqual(many.qualityOptions, [.init(value: "lossless", label: "CD"), .init(value: "hires", label: "hires")])
+        let one = try decoder.decode(AddonManifest.self, from: Data(#"{"id":"a","settings":[{"key":"quality","options":[{"value":"lossless"}]}]}"#.utf8))
+        XCTAssertEqual(one.qualityOptions, [])
     }
 
     func testAnAddonThatEnumeratesNoOptionsIsSentTheTierVerbatim() async throws {

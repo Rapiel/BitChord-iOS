@@ -367,7 +367,8 @@ final class AppModel {
             }
         )
 
-        let upgradeSearch = SourceUpgradeSearch(resolver: sourceResolver, registry: sourceRegistry, request: { ceiling.currentRequest })
+        let upgradeSearch = SourceUpgradeSearch(resolver: sourceResolver, registry: sourceRegistry, request: { ceiling.currentRequest },
+                                                slackSec: { [settings] in await settings.upgradeLengthSlackSeconds })
         qualityUpgrades = QualityUpgradeController(
             upgrade: QualityUpgrade(search: upgradeSearch, requestForNow: { ceiling.currentRequest }),
             search: upgradeSearch,

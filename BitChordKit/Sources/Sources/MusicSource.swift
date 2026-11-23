@@ -17,19 +17,33 @@ public struct SourceConfig: Codable, Hashable, Sendable, Identifiable {
     public var baseUrl: String
     /// JioSaavn is opt-in because catalogue matches can select the wrong recording.
     public var enabled: Bool
+    /// An addon's `quality` choices, as its manifest last said (Android 2fe5f3c7). Stored so the
+    /// picker can list them while the addon is down.
+    public var qualityOptions: [AddonQualityOption]
+    /// Which of `qualityOptions` the listener chose, or nil for the first one listed.
+    public var pickedQuality: String?
 
     public init(
         id: String = UUID().uuidString.lowercased(),
         kind: SourceKind,
         label: String = "",
         baseUrl: String = "",
-        enabled: Bool? = nil
+        enabled: Bool? = nil,
+        qualityOptions: [AddonQualityOption] = [],
+        pickedQuality: String? = nil
     ) {
         self.id = id
         self.kind = kind
         self.label = label
         self.baseUrl = baseUrl
         self.enabled = enabled ?? (kind != .jioSaavn)
+        self.qualityOptions = qualityOptions
+        self.pickedQuality = pickedQuality
+    }
+
+    /// The option in force: the pick while the addon still lists it, else its first.
+    public var activeQuality: AddonQualityOption? {
+        qualityOptions.first { $0.value == pickedQuality } ?? qualityOptions.first
     }
 
     /// What the Sources screen and the player show. Never blank.
@@ -47,7 +61,7 @@ public struct SourceConfig: Codable, Hashable, Sendable, Identifiable {
         !kind.needsServer || baseUrl.nonBlank != nil
     }
 
-    private enum CodingKeys: String, CodingKey { case id, kind, label, baseUrl, enabled }
+    private enum CodingKeys: String, CodingKey { case id, kind, label, baseUrl, enabled, qualityOptions, pickedQuality }
 
     /// Android's `SourceConfig` defaults, so a stored entry missing a field still loads. A kind this
     /// build doesn't know is a decode failure; ``SourceConfigStore`` drops that one entry only.
@@ -59,8 +73,21 @@ public struct SourceConfig: Codable, Hashable, Sendable, Identifiable {
             kind: kind,
             label: try c.decodeIfPresent(String.self, forKey: .label) ?? "",
             baseUrl: try c.decodeIfPresent(String.self, forKey: .baseUrl) ?? "",
-            enabled: try c.decodeIfPresent(Bool.self, forKey: .enabled)
+            enabled: try c.decodeIfPresent(Bool.self, forKey: .enabled),
+            qualityOptions: (try? c.decodeIfPresent([AddonQualityOption].self, forKey: .qualityOptions)) ?? [],
+            pickedQuality: try? c.decodeIfPresent(String.self, forKey: .pickedQuality)
         )
+    }
+}
+
+/// One entry of an addon's quality picker, as stored with the source.
+public struct AddonQualityOption: Codable, Hashable, Sendable {
+    public var value: String
+    public var label: String
+
+    public init(value: String, label: String) {
+        self.value = value
+        self.label = label
     }
 }
 
@@ -124,6 +151,11 @@ public protocol MusicSource: AnyObject, Sendable {
     ///     has is exactly what should be shown.
     func search(_ query: String, limit: Int, waitForAll: Bool, tier: StreamRequest.Tier?) async throws -> [Song]
 
+    /// The same search for a known recording (Android 7203588d). `target` is the track the query was
+    /// built from; a source whose backend matches on separate title and artist fields may pass them
+    /// on. Defaults to the plain search.
+    func search(_ query: String, limit: Int, waitForAll: Bool, tier: StreamRequest.Tier?, target: TrackMatcher.Target?) async throws -> [Song]
+
     /// An openable stream for one of this source's own track ids, or nil when this source turns
     /// out not to have it after all — a miss, not an error.
     func stream(trackId: String, tier: StreamRequest.Tier) async throws -> ResolvedStream?
@@ -139,6 +171,10 @@ extension MusicSource {
     public var config: SourceConfig? { nil }
     public func release() {}
     public func clearCompletedTrackCalls() async {}
+
+    public func search(_ query: String, limit: Int, waitForAll: Bool, tier: StreamRequest.Tier?, target: TrackMatcher.Target?) async throws -> [Song] {
+        try await search(query, limit: limit, waitForAll: waitForAll, tier: tier)
+    }
 
     public func search(_ query: String, limit: Int = 25) async throws -> [Song] {
         try await search(query, limit: limit, waitForAll: false, tier: nil)

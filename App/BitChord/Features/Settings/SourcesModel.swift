@@ -98,6 +98,14 @@ final class SourcesModel {
         return false
     }
 
+    /// An addon's quality pick (Android 2fe5f3c7). Off the stored config, not the row's copy: a health
+    /// pass may have refreshed it since the list was drawn.
+    func pickQuality(_ config: SourceConfig, _ value: String) {
+        guard var current = registry.config(config.id) else { return }
+        current.pickedQuality = value
+        registry.update(current)
+    }
+
     func confirmJioSaavn() {
         if let jioSaavn = registry.configs.first(where: { $0.kind == .jioSaavn }) {
             registry.setEnabled(jioSaavn.id, true)

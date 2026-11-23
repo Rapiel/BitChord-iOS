@@ -204,6 +204,14 @@ public final class TrackAnalyzer: @unchecked Sendable {
         // match on the network for a track that will never be mixed.
         if stopped { return }
         if isAnalysing(trackId) { return }
+        // Android 5167a0f6: no new pass on a phone that is already throttling (a pass is tens of
+        // seconds of decoding, the load that keeps it hot). A track measured in an earlier session
+        // costs nothing to restore; one left unmeasured gets a plain crossfade and is measured on a
+        // later tick once the phone has cooled. A pass already running finishes.
+        if [.serious, .critical].contains(ProcessInfo.processInfo.thermalState) {
+            restoreOnce(trackId)
+            return
+        }
         guard let analysisURI = analysisURI(for: trackId, playbackURI: uri) else { return }
 
         // Queued before the cache is even consulted, so a track measured in an earlier session
@@ -422,9 +430,16 @@ public final class TrackAnalyzer: @unchecked Sendable {
         }
 
         for candidate in complete {
-            guard let length = await AutomixAudioDecoder.containerDuration(of: candidate.fileURL), length > 0 else { continue }
+            // Every candidate is complete, so no more bytes will make an unreadable header readable,
+            // and a cut the wrong length now is the wrong length on the next tick too: remembered, or
+            // request() queues a pass on it four times a second for as long as the track plays.
+            guard let length = await AutomixAudioDecoder.containerDuration(of: candidate.fileURL), length > 0 else {
+                _ = withLock { badRenditions.insert(candidate.key) }
+                continue
+            }
             if abs(length - durationSeconds) > Self.renditionDurationTolerance {
                 Self.logger.debug("Rendition \(candidate.key, privacy: .public) rejected for \(trackId, privacy: .public): \(length)s against \(durationSeconds)s expected")
+                _ = withLock { badRenditions.insert(candidate.key) }
                 continue
             }
             if candidate.key != own {

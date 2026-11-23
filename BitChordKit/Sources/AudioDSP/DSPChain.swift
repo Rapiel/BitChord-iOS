@@ -4,6 +4,7 @@ import os
 /// BitChord's audio processors in their canonical order, run in place on Float32 PCM:
 ///
 ///     spatial widening → equaliser → transition filter → [silence detection] → loudness normalization
+///     → [peak limiter, while widening or the equaliser is on]
 ///
 /// Transition filtering comes last of the three filters: widening is a property
 /// of the track, and a bass swap that ran before it would have its own low end
@@ -42,6 +43,7 @@ public final class DSPChain: FloatAudioProcessor, @unchecked Sendable {
         /// Where the next block should start in the item's timeline, or -1
         /// while unknown. A block that starts elsewhere follows a seek.
         var nextSourceFrame: Int64 = -1
+        var limiter = PeakLimiter()
     }
 
     /// How far a block may start from where the last one ended and still count
@@ -103,6 +105,7 @@ public final class DSPChain: FloatAudioProcessor, @unchecked Sendable {
 
     public func configure(sampleRate: Double, channelCount: Int) {
         format.pointee = Format(sampleRate: sampleRate, channelCount: channelCount, nextSourceFrame: -1)
+        format.pointee.limiter.configure(sampleRate: sampleRate)
         formatWord.store(FloatPair.pack(Float(sampleRate), Float(max(channelCount, 0))))
         spatial.configure(sampleRate: sampleRate, channelCount: channelCount)
         equalizer.configure(sampleRate: sampleRate, channelCount: channelCount)
@@ -137,6 +140,7 @@ public final class DSPChain: FloatAudioProcessor, @unchecked Sendable {
                 spatial.flush()
                 equalizer.flush()
                 transition.flush()
+                format.pointee.limiter.reset()
             }
             format.pointee.nextSourceFrame = position + Int64(channels.frameCount)
         } else if expected >= 0 {
@@ -147,6 +151,14 @@ public final class DSPChain: FloatAudioProcessor, @unchecked Sendable {
         transition.process(channels)
         silenceDetector.process(channels, sourceFramePosition: sourceFramePosition)
         loudness.process(channels)
+        // The widener and the equaliser leave their overs in place; this catches whatever survives
+        // (Android holds its loudness limiter on for the same two). Idle otherwise, so the chain
+        // stays bit-exact with both off.
+        if spatial.isEnabled || equalizer.isEnabled {
+            format.pointee.limiter.process(channels)
+        } else {
+            format.pointee.limiter.reset()
+        }
     }
 
     /// Runs the chain over Float32 samples in an `AudioBufferList` — what an
@@ -181,6 +193,7 @@ public final class DSPChain: FloatAudioProcessor, @unchecked Sendable {
         transition.flush()
         silenceDetector.flush()
         loudness.flush()
+        format.pointee.limiter.reset()
     }
 
     public func reset() {

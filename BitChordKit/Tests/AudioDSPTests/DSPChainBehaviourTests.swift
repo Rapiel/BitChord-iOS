@@ -253,10 +253,51 @@ final class DSPChainBehaviourTests: XCTestCase {
         let block = AudioBlock(channelCount: 2, capacityFrames: 64)
         // 0.9 lifted by 3 dB is about 1.27, past nominal full scale.
         DSPTestSignals.fillBlock(block, with: [Float](repeating: 0.9, count: 128))
+        // The stages themselves keep the headroom; only the limiter at the end of the chain turns
+        // the over down, and down rather than squared off.
+        chain.equalizer.process(block)
+        let sample = block.samples[64 * 2 - 2]
+        XCTAssertGreaterThan(sample, 1.1, "Headroom must be preserved above 1.0 between stages (got \(sample))")
+
+        DSPTestSignals.fillBlock(block, with: [Float](repeating: 0.9, count: 128))
+        chain.process(block)
+        let limited = (0..<128).map { abs(block.samples[$0]) }.max()!
+        XCTAssertLessThanOrEqual(limited, PeakLimiter.ceiling + 1e-5)
+        XCTAssertGreaterThan(limited, 0.9, "The limiter turns the over down, not mutes it (got \(limited))")
+    }
+
+    /// Android 2986a5b9: the widener's overs with the equaliser and normalization off.
+    func testTheLimiterCatchesSpatialOversWithTheEqualiserOff() {
+        let chain = DSPChain()
+        chain.apply(AudioDSPSettings(spatialAudio: true, loudnessNormalization: false))
+        chain.configure(sampleRate: sampleRate, channelCount: 2)
+        chain.transition.open()
+        chain.flush()
+
+        let frames = 512
+        let block = AudioBlock(channelCount: 2, capacityFrames: frames)
+        for frame in 0..<frames {
+            let value = Float(0.95 * sin(2 * .pi * 100 * Double(frame) / sampleRate))
+            block.samples[frame * 2] = value
+            block.samples[frame * 2 + 1] = -value
+        }
+        block.reset(frames)
         chain.process(block)
 
-        let sample = block.samples[64 * 2 - 2]
-        XCTAssertGreaterThan(sample, 1.1, "Headroom must be preserved above 1.0 (got \(sample))")
+        let peak = (0..<frames * 2).map { abs(block.samples[$0]) }.max()!
+        XCTAssertLessThanOrEqual(peak, PeakLimiter.ceiling + 1e-5, "spatial output stays under the ceiling (got \(peak))")
+        XCTAssertGreaterThan(peak, 0.8, "the widened signal is kept, not muted (got \(peak))")
+    }
+
+    func testTheLimiterLeavesTheChainBitExactWithEveryStageOff() {
+        let chain = DSPChain()
+        chain.apply(AudioDSPSettings(spatialAudio: false, loudnessNormalization: false))
+        chain.configure(sampleRate: sampleRate, channelCount: 2)
+        let loud = [Float](repeating: 1.4, count: 128)
+        let block = AudioBlock(channelCount: 2, capacityFrames: 64)
+        DSPTestSignals.fillBlock(block, with: loud)
+        chain.process(block)
+        XCTAssertEqual(DSPTestSignals.contents(of: block), loud)
     }
 
     func testZeroLengthInputIsHandledSafelyAcrossTheChain() {

@@ -10,6 +10,12 @@ public protocol RemoteCommandRegistering: AnyObject {
     func deactivate()
     /// Lights the like/dislike buttons for the current item.
     func updateFeedback(isLiked: Bool, isDisliked: Bool)
+    /// Shows whether the app's queue is shuffled (Android's player-side shuffle state).
+    func updateShuffle(isOn: Bool)
+}
+
+public extension RemoteCommandRegistering {
+    func updateShuffle(isOn: Bool) {}
 }
 
 /// `MPRemoteCommandCenter.shared()`.
@@ -68,6 +74,10 @@ public final class SystemRemoteCommandCenter: RemoteCommandRegistering {
         add(center.dislikeCommand) { [center] _ in .dislike(wasActive: center.dislikeCommand.isActive) }
         center.likeCommand.isEnabled = showsFeedbackCommands
         center.dislikeCommand.isEnabled = showsFeedbackCommands
+        // Android 6dedd1c9 (#1554): external controllers toggle the app's own shuffle. Repeat stays app-only.
+        add(center.changeShuffleModeCommand) { event in
+            (event as? MPChangeShuffleModeCommandEvent).map { .changeShuffleMode(isOn: $0.shuffleType != .off) }
+        }
     }
 
     public func deactivate() {
@@ -81,6 +91,10 @@ public final class SystemRemoteCommandCenter: RemoteCommandRegistering {
     public func updateFeedback(isLiked: Bool, isDisliked: Bool) {
         center.likeCommand.isActive = isLiked
         center.dislikeCommand.isActive = isDisliked
+    }
+
+    public func updateShuffle(isOn: Bool) {
+        center.changeShuffleModeCommand.currentShuffleType = isOn ? .items : .off
     }
 
     /// The command center calls its targets on the main thread; hop there if it ever doesn't.

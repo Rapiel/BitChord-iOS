@@ -1068,6 +1068,9 @@ final class PlayerController {
         trackers.append(ChangeTracker.track({ settings.crossfadeSeconds }) { [weak self] seconds in
             self?.engine.crossfadeDuration = TimeInterval(seconds)
         })
+        trackers.append(ChangeTracker.track({ [weak self] in self?.shuffleEnabled ?? false }) { [weak self] on in
+            self?.engine.setShuffleState(on)
+        })
         trackers.append(ChangeTracker.track({ settings.skipSilence }) { [weak self] on in
             self?.engine.skipSilence = on
         })
@@ -1328,6 +1331,10 @@ extension PlayerController: AudioPlayerEngineDelegate {
             return .success
         case .changePlaybackRate(let rate):
             setSpeed(rate)
+            return .success
+        case .changeShuffleMode(let on):
+            guard !controlsLocked else { return .commandFailed }
+            if on != shuffleEnabled { toggleShuffle() }
             return .success
         case .stop:
             pause()

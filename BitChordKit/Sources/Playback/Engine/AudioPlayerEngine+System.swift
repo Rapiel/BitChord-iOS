@@ -71,7 +71,7 @@ extension AudioPlayerEngine {
             skip(by: -interval)
         case .changePlaybackRate(let value):
             rate = value
-        case .like, .dislike:
+        case .like, .dislike, .changeShuffleMode:
             return .commandFailed
         }
         return .success

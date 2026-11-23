@@ -55,6 +55,8 @@ public enum RemoteCommand: Hashable, Sendable {
     /// The heart. `isActive` is what the surface showed before the tap.
     case like(wasActive: Bool)
     case dislike(wasActive: Bool)
+    /// Shuffle from the lock screen, a car or a watch: on for any shuffle type but off.
+    case changeShuffleMode(isOn: Bool)
 }
 
 /// How a remote command was handled; mirrors `MPRemoteCommandHandlerStatus`.

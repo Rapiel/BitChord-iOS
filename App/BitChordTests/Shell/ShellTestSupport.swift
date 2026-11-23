@@ -223,6 +223,8 @@ final class FakeRemoteCommandCenter: RemoteCommandRegistering {
     func activate(handler: @escaping @MainActor (RemoteCommand) -> RemoteCommandResult) { self.handler = handler }
     func deactivate() { handler = nil }
     func updateFeedback(isLiked: Bool, isDisliked: Bool) { feedback = (isLiked, isDisliked) }
+    private(set) var shuffleOn = false
+    func updateShuffle(isOn: Bool) { shuffleOn = isOn }
 
     @discardableResult
     func fire(_ command: RemoteCommand) -> RemoteCommandResult {

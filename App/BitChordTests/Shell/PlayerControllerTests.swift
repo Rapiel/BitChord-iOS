@@ -309,6 +309,25 @@ final class RemoteCommandWiringTests: XCTestCase {
         await waitUntil("the lock-screen scrub lands") { harness.player.position >= 1.9 }
     }
 
+    /// Android 6dedd1c9 (#1554): a car or watch shuffle button toggles the app's queue shuffle, and the
+    /// lock screen shows the queue's state whichever side changed it.
+    func testTheShuffleCommandTogglesTheQueueShuffle() async throws {
+        let harness = PlayerHarness(test: self)
+        let songs = try (1...4).map { try harness.song("ssssssssss\($0)") }
+        harness.player.play(songs, startAt: 0)
+        await waitUntil("playing") { harness.engine.isPlaying }
+        XCTAssertFalse(harness.player.shuffleEnabled)
+
+        XCTAssertEqual(harness.remote.fire(.changeShuffleMode(isOn: true)), .success)
+        XCTAssertTrue(harness.player.shuffleEnabled)
+        await waitUntil("the lock screen shows shuffle on") { harness.remote.shuffleOn }
+        XCTAssertEqual(harness.remote.fire(.changeShuffleMode(isOn: true)), .success)
+        XCTAssertTrue(harness.player.shuffleEnabled, "asking for the state it is in does not flip it")
+
+        harness.player.toggleShuffle()
+        await waitUntil("the app's own toggle reaches the lock screen") { !harness.remote.shuffleOn }
+    }
+
     func testWithNothingLoadedCommandsSayThereIsNothingToControl() {
         let harness = PlayerHarness(test: self)
         XCTAssertEqual(harness.remote.fire(.nextTrack), .noActionableNowPlayingItem)

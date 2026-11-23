@@ -515,6 +515,11 @@ public final class AudioPlayerEngine {
         remoteCommands?.updateFeedback(isLiked: status == .like, isDisliked: status == .dislike)
     }
 
+    /// Shows the queue's shuffle state to the lock screen and other controllers.
+    public func setShuffleState(_ isOn: Bool) {
+        remoteCommands?.updateShuffle(isOn: isOn)
+    }
+
     // MARK: - Sleep timer
 
     public func startSleepTimer(_ request: SleepTimerRequest) {

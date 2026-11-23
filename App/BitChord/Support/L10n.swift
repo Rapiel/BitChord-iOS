@@ -1256,7 +1256,7 @@ enum L10n {
     static var preferLossless: String { tr("prefer_lossless") }
     /// Prefer music-only version
     static var preferMusicOnly: String { tr("prefer_music_only") }
-    /// For music videos, show the video details while finding and loading the catalogue audio version
+    /// Music videos play as their audio version, and the next track in the queue is converted ahead of time so Automix and crossfade work
     static var preferMusicOnlySubtitle: String { tr("prefer_music_only_subtitle") }
     /// Prefer USB DAC
     static var preferUsbDac: String { tr("prefer_usb_dac") }

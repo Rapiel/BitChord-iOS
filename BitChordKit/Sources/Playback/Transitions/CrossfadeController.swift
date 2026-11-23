@@ -41,6 +41,9 @@ protocol CrossfadeHost: AnyObject {
     var sleepsAfterCurrentTrack: Bool { get }
     var playbackSpeed: Float { get }
     var now: TimeInterval { get }
+    /// Where the sleep timer's closing fade has the volume now; 1 outside it. A blend is scaled
+    /// by it so a crossfade in the last 30 s neither jumps up nor lands back down when it ends.
+    var sleepFadeGain: Float { get }
 
     /// Loads `item` onto the standby deck at `cue`, silent and paused, at `rate`.
     func armIncoming(_ item: PlayableItem, cue: TimeInterval, rate: Float)
@@ -405,7 +408,7 @@ final class CrossfadeController {
     /// Starts the incoming track and moves the session onto it, as its first note sounds.
     private func startFade() {
         guard let into = incoming else { return bail() }
-        into.volume = spec.incomingGain.gain(at: 0)
+        into.volume = host.sleepFadeGain * spec.incomingGain.gain(at: 0)
         fadeCue = into.position
         into.playWhenReady = true
         fadeStartedAt = host.now
@@ -432,8 +435,9 @@ final class CrossfadeController {
         let progress = min(max(elapsed / span, 0), 1)
         if !latencyMeasured, elapsed > 0 { measureStartLatency(contentElapsed: elapsed) }
 
-        into.volume = spec.incomingGain.gain(at: progress)
-        out.volume = spec.outgoingGain.gain(at: progress)
+        let sleepGain = host.sleepFadeGain
+        into.volume = sleepGain * spec.incomingGain.gain(at: progress)
+        out.volume = sleepGain * spec.outgoingGain.gain(at: progress)
         rideFilters(progress)
 
         let switchedOff = smart ? !host.automixActive : host.crossfadeSeconds <= 0
@@ -524,7 +528,7 @@ final class CrossfadeController {
         // mid-handover with the incoming track's low end lifted out.
         incoming?.setTransitionFilter(.open)
         outgoing?.setTransitionFilter(.open)
-        incoming?.volume = 1
+        incoming?.volume = host.sleepFadeGain
         bailFromGain = outgoing?.volume ?? 0
         bailStartedAt = host.now
         phase = .bailing
@@ -537,13 +541,13 @@ final class CrossfadeController {
         outgoing?.setTransitionFilter(.open)
         if handedOff {
             if let incoming {
-                incoming.volume = 1
+                incoming.volume = host.sleepFadeGain
                 // Undoes the beatmatch stretch; idempotent when there was none.
                 host.setRate(host.playbackSpeed, on: incoming)
             }
             if let outgoing { host.retire(outgoing) }
         } else {
-            outgoing?.volume = 1
+            outgoing?.volume = host.sleepFadeGain
             if let incoming { host.retire(incoming) }
         }
         outgoing = nil

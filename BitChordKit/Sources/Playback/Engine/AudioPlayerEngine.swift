@@ -575,9 +575,16 @@ public final class AudioPlayerEngine {
 
     /// Turns the session deck to `gain` for the sleep fade. A crossfade, Automix blend or quality
     /// swap owns the deck volumes while it runs, so the fade sits out until it is over.
+    var sleepFadeGain: Float {
+        guard sleepTimerFadeOut, let deadline = sleepTimer?.deadline else { return 1 }
+        return SleepTimerState.fadeVolume(remaining: deadline - clock.now, enabled: true)
+    }
+
     private func setSleepFadeGain(_ gain: Float) {
         guard gain < 1 || sleepFadeApplied else { return }
-        guard !crossfade.isTransitioning, swapTask == nil else { return }
+        // Arming leaves the session deck alone, so the fade carries on; a blend scales by
+        // sleepFadeGain itself.
+        guard !crossfade.isTransitioning || crossfade.armedIncomingID != nil, swapTask == nil else { return }
         active.volume = gain
         sleepFadeApplied = gain < 1
     }

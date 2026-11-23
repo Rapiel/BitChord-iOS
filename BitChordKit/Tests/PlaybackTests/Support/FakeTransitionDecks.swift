@@ -50,6 +50,7 @@ final class FakeCrossfadeHost: CrossfadeHost {
     var sleepsAfterCurrentTrack = false
     var playbackSpeed: Float = 1
     var now: TimeInterval = 100
+    var sleepFadeGain: Float = 1
 
     var armed: [(item: PlayableItem, cue: TimeInterval, rate: Float)] = []
     var handoffs = 0

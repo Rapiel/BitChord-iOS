@@ -63,6 +63,21 @@ final class SleepTimerEngineTests: EngineTestCase {
         }
     }
 
+    func testABlendSeesNoSleepGainUnlessTheFadeIsDue() throws {
+        let item = try tone(2, name: "sleep-gain")
+        let h = harness(queue: [item])
+        XCTAssertEqual(h.engine.sleepFadeGain, 1, "no timer")
+        h.engine.startSleepTimer(.minutes(15))
+        XCTAssertEqual(h.engine.sleepFadeGain, 1, "timer set, fade not yet due")
+        h.engine.startSleepTimer(.endOfTrack)
+        XCTAssertEqual(h.engine.sleepFadeGain, 1, "end of track has its own fade")
+        h.engine.startSleepTimer(.duration(15))
+        XCTAssertEqual(h.engine.sleepFadeGain, 0.5, accuracy: 0.05, "half way through the last 30 s")
+        h.engine.sleepTimerFadeOut = false
+        XCTAssertEqual(h.engine.sleepFadeGain, 1, "fade switched off")
+        h.engine.cancelSleepTimer()
+    }
+
     func testWithTheFadeOffTheVolumeStaysFull() async throws {
         let item = try tone(6, name: "sleep-no-fade")
         let h = harness(queue: [item])

@@ -146,6 +146,43 @@ final class CrossfadeCurveTests: XCTestCase {
         XCTAssertNotNil(controller.timeSinceTransition())
     }
 
+    func testWithNoSleepFadeTheBlendIsTheBareCurve() {
+        let host = FakeCrossfadeHost.playing()
+        let controller = CrossfadeController(host: host)
+        startStandardFade(host, controller)
+        for position in [0.0, 1.5, 3, 4.5] {
+            host.deckB.position = position
+            controller.tick()
+            XCTAssertEqual(host.deckB.volume, TransitionGainCurve.equalPowerRise.gain(at: position / 6), "incoming at \(position)s, bit for bit")
+            XCTAssertEqual(host.deckA.volume, TransitionGainCurve.equalPowerFall.gain(at: position / 6), "outgoing at \(position)s, bit for bit")
+        }
+        host.deckB.position = 6
+        controller.tick()
+        XCTAssertEqual(host.deckB.volume, 1)
+    }
+
+    func testABlendInsideTheSleepFadeKeepsItsLevel() {
+        let host = FakeCrossfadeHost.playing()
+        let controller = CrossfadeController(host: host)
+        host.sleepFadeGain = 0.5
+        host.deckA.volume = 0.5
+        startStandardFade(host, controller)
+        host.deckB.position = 0
+        controller.tick()
+        XCTAssertEqual(host.deckA.volume, 0.5, accuracy: 0.0001, "no jump up as the blend starts")
+        host.sleepFadeGain = 0.4
+        host.deckB.position = 3
+        controller.tick()
+        let half = equalPower(0.5)
+        XCTAssertEqual(host.deckB.volume, 0.4 * half.rise, accuracy: 0.0001)
+        XCTAssertEqual(host.deckA.volume, 0.4 * half.fall, accuracy: 0.0001)
+        host.sleepFadeGain = 0.3
+        host.deckB.position = 6
+        controller.tick()
+        XCTAssertEqual(controller.phase, .idle)
+        XCTAssertEqual(host.deckB.volume, 0.3, accuracy: 0.0001, "handed back at the fade's level, not full volume")
+    }
+
     func testFadeTightensForAShortIncomingTrack() {
         let host = FakeCrossfadeHost.playing(incoming: 9)
         let controller = CrossfadeController(host: host)

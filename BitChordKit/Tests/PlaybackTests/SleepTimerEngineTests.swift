@@ -44,6 +44,25 @@ final class SleepTimerEngineTests: EngineTestCase {
         XCTAssertTrue(h.engine.playWhenReady)
     }
 
+    func testReplacingTheTimerMidFadeRestoresTheVolume() async throws {
+        for replacement in [SleepTimerRequest.minutes(15), .endOfTrack] {
+            let item = try tone(8, name: "sleep-fade-replace")
+            let h = harness(queue: [item])
+            h.engine.load(item, playWhenReady: true)
+            await waitUntil("playing") { h.engine.isPlaying }
+            let deck = h.engine.activeDeckID
+
+            h.engine.startSleepTimer(.duration(5))
+            await waitUntil("quieter", timeout: 2) { h.engine.deck(deck).volume < 0.8 }
+            h.engine.startSleepTimer(replacement)
+            XCTAssertEqual(h.engine.deck(deck).volume, 1, "replaced by \(replacement)")
+            await pause(for: 0.3)
+            XCTAssertEqual(h.engine.deck(deck).volume, 1, "the old fade is gone, replaced by \(replacement)")
+            XCTAssertTrue(h.engine.playWhenReady)
+            h.engine.cancelSleepTimer()
+        }
+    }
+
     func testWithTheFadeOffTheVolumeStaysFull() async throws {
         let item = try tone(6, name: "sleep-no-fade")
         let h = harness(queue: [item])

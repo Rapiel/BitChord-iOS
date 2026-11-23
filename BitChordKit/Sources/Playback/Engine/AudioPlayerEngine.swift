@@ -525,6 +525,8 @@ public final class AudioPlayerEngine {
     public func startSleepTimer(_ request: SleepTimerRequest) {
         sleepTask?.cancel()
         sleepTask = nil
+        // A timer replaced mid-fade would otherwise leave the volume where the old fade stopped.
+        setSleepFadeGain(1)
         switch request {
         case .minutes(let minutes):
             sleepTimer = SleepTimerState(presetMinutes: minutes, deadline: clock.now + TimeInterval(minutes) * 60)

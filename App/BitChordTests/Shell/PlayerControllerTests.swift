@@ -328,6 +328,14 @@ final class RemoteCommandWiringTests: XCTestCase {
         await waitUntil("the app's own toggle reaches the lock screen") { !harness.remote.shuffleOn }
     }
 
+    func testASavedShuffleShowsOnTheLockScreenAtLaunch() async {
+        let settings = makeTestSettings()
+        settings.shuffleEnabled = true
+        let harness = PlayerHarness(test: self, settings: settings)
+        XCTAssertTrue(harness.player.shuffleEnabled)
+        XCTAssertTrue(harness.remote.shuffleOn, "set before anything plays")
+    }
+
     func testWithNothingLoadedCommandsSayThereIsNothingToControl() {
         let harness = PlayerHarness(test: self)
         XCTAssertEqual(harness.remote.fire(.nextTrack), .noActionableNowPlayingItem)

@@ -415,10 +415,11 @@ public final class SourceResolver: StreamResolving, @unchecked Sendable {
         let candidates = Self.rankedAbove(youtube.configId, active).filter { $0.configId != servedBy }
         guard let (source, chosen) = try await bestAcross(
             candidates, target, request.tier,
-            waitForAll: true, strictLength: true, requireSharedArtist: true, provesFirstBytes: true,
+            waitForAll: true, strictLength: true, requireSharedArtist: true,
             // Android a58cc106: the listener's "Track length tolerance" decides the swap's bar too,
             // or the slider could tighten it and never loosen it.
             driftSec: slackSec,
+            provesFirstBytes: true,
             patience: Self.upgradePatience,
             accept: { candidate, stream in
                 let worth = Self.worthSwapping(stream.format, playing: playing)

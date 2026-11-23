@@ -1,7 +1,7 @@
 import XCTest
 @testable import Automix
 
-/// Beat This! post-processing, and the model itself through ONNX Runtime.
+/// Beat This! post-processing, and the model itself once one ships (skipped until then).
 final class BeatTrackerTests: XCTestCase {
 
     // MARK: - Peak picking
@@ -91,7 +91,7 @@ final class BeatTrackerTests: XCTestCase {
 
     func testTheShippedModelTracksADrumKit() throws {
         let tracker = BeatTracker(threads: { 2 })
-        XCTAssertTrue(tracker.isAvailable, "the model ships as a module resource and ONNX Runtime is linked")
+        try XCTSkipUnless(tracker.isAvailable, "no Beat This! model ships until the Core ML step")
         let samples = SyntheticAudio.drumTrack(bpm: 96, seconds: 30, sampleRate: MelSpectrogram.sampleRate)
 
         let grid = try XCTUnwrap(tracker.track(samples))

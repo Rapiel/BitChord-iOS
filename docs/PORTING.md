@@ -589,6 +589,7 @@ Each question has a recommendation and a short reason. Several depend on Q1, so 
 6. **Automix and the ONNX models: v1 or later? ONNX Runtime or Core ML?**
    - Recommendation: v2. Ship plain crossfade in v1. When Automix comes, start with ONNX Runtime (`onnxruntime-objc`) and reuse the existing `.onnx` files; move to Core ML later if speed or battery needs it.
    - Why: it depends on the C++ analyzer bridge, both models and a custom audio engine. ONNX Runtime means no model conversion. Converting the int8 models to Core ML may need the original float weights.
+   - Update (2026-11-23): Microsoft withdrew `onnxruntime-swift-package-manager`, so ONNX Runtime and the `.onnx` files were removed and Automix runs on DSP estimates. The models are being converted to Core ML from the original PyTorch weights (both convert; Beat This! needs a fixed 1500-frame input).
 
 7. **CarPlay in v1?**
    - Recommendation: request the CarPlay audio entitlement now. Build it in v1.1, once playback and library (2.1–2.5) are stable.

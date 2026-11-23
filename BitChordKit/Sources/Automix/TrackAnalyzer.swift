@@ -668,7 +668,7 @@ public final class TrackAnalyzer: @unchecked Sendable {
         // is what a track uses when it is the *incoming* side of a different transition.
         let leading = tailGrid ?? headGrid
 
-        Self.logger.debug("Analysed \(trackId, privacy: .public): bpm=\(leading?.bpm ?? features.bpm) conf=\(leading?.beatConfidence ?? features.beatConfidence) key=\(features.key, privacy: .public) contentEnd=\(features.contentEndTime) vocalMask=\(head?.vocalMask != nil || tail?.vocalMask != nil ? "model" : "dsp", privacy: .public)")
+        Self.logger.debug("Analysed \(trackId, privacy: .public): bpm=\(leading?.bpm ?? features.bpm) conf=\(leading?.beatConfidence ?? features.beatConfidence) key=\(features.key, privacy: .public) contentEnd=\(features.contentEndTime) grid=\(leading != nil ? "model" : "dsp", privacy: .public) beats=\(headGrid?.beats.count ?? 0)+\(tailGrid?.beats.count ?? 0) downbeats=\(headGrid?.downbeats.count ?? 0)+\(tailGrid?.downbeats.count ?? 0) vocalMask=\(head?.vocalMask != nil || tail?.vocalMask != nil ? "model" : "dsp", privacy: .public)")
 
         var downbeats = (headGrid?.downbeats ?? []) + (tailGrid?.downbeats ?? [])
         if downbeats.isEmpty { downbeats = features.downbeats }

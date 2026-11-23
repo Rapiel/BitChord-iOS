@@ -14,7 +14,7 @@ import PackageDescription
 //   AudioCache        playback/{AudioCache,ChunkedDataSource,DynamicLruCacheEvictor}.kt
 //   PlaybackPolicy    playback/{QualityUpgrade,StreamChoice,StreamContainer,PlaybackFallback,OriginalVersion,AudioOutputStatus,AudioRouting}.kt, data/NerdStats.kt
 //   Playback          playback/{PlaybackService,PlayerConnection,CrossfadeController,SleepTimer,...}.kt (AVPlayer engine)
-//   Automix           playback/smart/*, native/analyzer/* (C++ in AutomixAnalyzer), app/src/main/assets/*.onnx
+//   Automix           playback/smart/*, native/analyzer/* (C++ in AutomixAnalyzer); the assets/*.onnx models are not shipped (Core ML pending)
 //   Lyrics            data/lyrics/*
 //   Downloads         download/*
 //   Sources           data/sources/*, data/jiosaavn/*
@@ -27,11 +27,6 @@ import PackageDescription
 
 let core: Target.Dependency = "BitChordCore"
 
-// ONNX Runtime runs Automix's two models (Beat This! beats, open-unmix vocals).
-// A static xcframework with iOS, iOS Simulator and macOS slices, so the package
-// tests still run on the Mac host.
-let onnxRuntime: Target.Dependency = .product(name: "onnxruntime", package: "onnxruntime-swift-package-manager")
-
 let modules: [(name: String, dependencies: [Target.Dependency])] = [
     ("BitChordCore", []),
     ("InnerTube", [core]),
@@ -41,7 +36,7 @@ let modules: [(name: String, dependencies: [Target.Dependency])] = [
     ("AudioCache", [core, "StreamResolution"]),
     ("PlaybackPolicy", [core]),
     ("Playback", [core, "PlaybackQueue", "AudioDSP", "AudioCache", "PlaybackPolicy"]),
-    ("Automix", [core, "AudioDSP", "AutomixAnalyzer", onnxRuntime]),
+    ("Automix", [core, "AudioDSP", "AutomixAnalyzer"]),
     ("Lyrics", [core]),
     ("Downloads", [core]),
     ("Sources", [core]),
@@ -68,12 +63,6 @@ let extraTestDependencies: [String: [String]] = [
     "Playback": ["AudioDSP", "AudioCache"],
 ]
 
-// Resources a module ships, keyed by module name.
-let moduleResources: [String: [Resource]] = [
-    // beat_this_int8.onnx and vocals_umxhq_int8.onnx, copied from app/src/main/assets.
-    "Automix": [.copy("Models")],
-]
-
 let package = Package(
     name: "BitChordKit",
     defaultLocalization: "en",
@@ -85,10 +74,9 @@ let package = Package(
     // every other module stays dependency-free.
     dependencies: [
         .package(url: "https://github.com/amosavian/AMSMB2.git", from: "4.0.0"),
-        .package(url: "https://github.com/microsoft/onnxruntime-swift-package-manager", exact: "1.24.2"),
     ],
     targets: modules.map { module in
-        .target(name: module.name, dependencies: module.dependencies, resources: moduleResources[module.name])
+        .target(name: module.name, dependencies: module.dependencies)
     } + [
         // The Automix native analyzer (native/analyzer/*.cpp, C++17, AGPLv3) behind a
         // plain C header, so Swift imports it without C++ interop on any dependent.

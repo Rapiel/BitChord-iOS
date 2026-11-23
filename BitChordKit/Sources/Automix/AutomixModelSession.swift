@@ -49,17 +49,19 @@ public enum AutomixAnalysisBudget: String, Sendable, CaseIterable {
     }
 }
 
-/// The two models Automix ships as module resources.
-enum AutomixModel: String {
-    /// Beat This! (CPJKU, ISMIR 2024), int8. MIT code and weights.
-    case beatThis = "beat_this_int8"
-    /// open-unmix "vocals" target (Inria/SigSep), int8. MIT weights.
-    case vocals = "vocals_umxhq_int8"
+/// The two models Automix runs.
+///
+/// None ships today: Microsoft withdrew the ONNX Runtime Swift package, so the runtime and the
+/// .onnx files were removed, and the Core ML conversions come in a later step. Until then every
+/// tracker answers nil and the analysis keeps its DSP estimates.
+enum AutomixModel {
+    /// Beat This! (CPJKU, ISMIR 2024). MIT code and weights.
+    case beatThis
+    /// open-unmix "vocals" target (Inria/SigSep). MIT weights.
+    case vocals
 
-    /// The bundled copy, or nil if the resource is missing from the build.
-    var bundledURL: URL? {
-        Bundle.module.url(forResource: rawValue, withExtension: "onnx", subdirectory: "Models")
-    }
+    /// The bundled copy; nil while no model ships.
+    var bundledURL: URL? { nil }
 }
 
 /// One lazily opened ONNX Runtime session over a model file.

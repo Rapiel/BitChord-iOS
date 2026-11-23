@@ -33,16 +33,9 @@ A licence is given only where a licence file or a licence statement was found. W
 - Licence: MIT, as stated in the comment in `vocal_spectrogram.h` (for `openunmix/transforms.py`). Not checked against the project's own licence file.
 - Used in: `BitChordKit/Sources/AutomixAnalyzer/analyzer/vocal_spectrogram.{h,cpp}`, whose STFT front end follows Open-Unmix's `TorchSTFT`.
 
-## Models in this repository
+## Models
 
-Both models are byte-identical to the copies in BitChord for Android (`app/src/main/assets/`). They are loaded by `BitChordKit/Sources/Automix/AutomixModelSession.swift`.
-
-| File | Model | Origin | Licence |
-|---|---|---|---|
-| `BitChordKit/Sources/Automix/Models/beat_this_int8.onnx` | Beat This! beat and downbeat tracker, int8 | CPJKU ([beat_this](https://github.com/CPJKU/beat_this)) | MIT for code and weights, as stated in `AutomixModelSession.swift` and `BeatTracker.swift`. Not checked against the release. |
-| `BitChordKit/Sources/Automix/Models/vocals_umxhq_int8.onnx` | Open-Unmix UMX-HQ "vocals" target, int8 | Inria and SigSep ([open-unmix-pytorch](https://github.com/sigsep/open-unmix-pytorch)) | MIT weights, as stated in `AutomixModelSession.swift`. The Android source says this was confirmed on the Zenodo deposit. Not checked against the deposit. |
-
-Who converted the models to int8 ONNX is not recorded in either repository.
+No model ships in this repository at the moment. The two int8 ONNX models BitChord for Android ships (Beat This! and the Open-Unmix UMX-HQ "vocals" target) were removed together with ONNX Runtime, whose Swift package Microsoft withdrew. Automix runs on its DSP estimates until Core ML conversions of the same models are added; they will be listed here with their licences then.
 
 ## Swift package dependencies
 
@@ -61,12 +54,6 @@ Resolved versions are pinned in `BitChordKit/Package.resolved`.
 - Used in: through AMSMB2.
 
 The LGPL-2.1 lets you replace these libraries with a modified version. The full source of this app is in this repository, so you can rebuild it against a modified AMSMB2 or libsmb2 by changing the package dependency in `BitChordKit/Package.swift`.
-
-### ONNX Runtime
-
-- Project: [onnxruntime-swift-package-manager](https://github.com/microsoft/onnxruntime-swift-package-manager) 1.24.2 by Microsoft, which downloads the prebuilt ONNX Runtime C library (`pod-archive-onnxruntime-c-1.24.2.zip`).
-- Licence: MIT (the package's `LICENSE` file and the `LICENSE` file inside the binary archive).
-- Used in: `Automix`, to run the two models above.
 
 ## Code whose logic is ported or followed
 

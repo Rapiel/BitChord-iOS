@@ -102,4 +102,4 @@ A maintainer reviews and approves every pull request before it merges. Review lo
 
 BitChord for iOS is licensed under GPL-3.0. Everything you contribute, and every dependency, must be compatible with it. Files ported from Orchard keep their AGPL-3.0 headers; do not remove or weaken a licence header or a credit to another project.
 
-The package has two third-party dependencies, AMSMB2 and ONNX Runtime. Do not add another unless the change cannot be done without it. A new dependency needs a reason in the pull request covering why it is necessary, its effect on app size, and its licence, and an entry in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
+The package has one third-party dependency, AMSMB2. Do not add another unless the change cannot be done without it. A new dependency needs a reason in the pull request covering why it is necessary, its effect on app size, and its licence, and an entry in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).

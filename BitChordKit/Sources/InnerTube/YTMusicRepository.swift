@@ -235,37 +235,17 @@ public final class YTMusicRepository: Sendable {
     /// is a query, and which tab it runs against is the user's to pick afterwards.
     public func searchSuggestions(input: String) async throws -> [String] {
         try await call("suggest") {
-            InnerTubeParser.parseSearchSuggestions(try await self.suggestionsResponse(input))
-        }
-    }
-
-    /// One get_search_suggestions request per typed input, shared by the text completions and the
-    /// typeahead cards: the search field asks for both on every keystroke.
-    private func suggestionsResponse(_ input: String) async throws -> InnerTubeJSON {
-        let task = await caches.suggestions(for: input) { try await self.client.searchSuggestions(input) }
-        do {
-            return try await task.value
-        } catch {
-            // Never keep a failure: the session refresh in call(_:) retries straight into a new request.
-            await caches.dropSuggestions(for: input)
-            throw error
+            InnerTubeParser.parseSearchSuggestions(try await self.client.searchSuggestions(input))
         }
     }
 
     /// Live media results for the typeahead phase, so the dropdown can show playable cards beside
-    /// the text completions. Confirmed searches go through ``searchPage(query:filter:)`` and are
-    /// recorded properly.
+    /// the text completions. Deliberately unauthenticated (see
+    /// ``InnerTubeClient/searchTypeahead(_:)``); confirmed searches go through
+    /// ``searchPage(query:filter:)`` and are recorded properly.
     public func searchTypeahead(input: String) async throws -> InnerTubeParser.SearchPage {
         try await call("typeahead") {
-            // Android 25841a57: the suggestions endpoint, signed in, carries cards ranked by this
-            // account's listening, and per Android it does not file the keystroke in the account's
-            // history the way a signed-in search would (not verified separately on iOS). The
-            // anonymous search only fills in when it has no cards.
-            // A failed suggestions call falls to the anonymous search too, so the dropdown still fills.
-            if let response = try? await self.suggestionsResponse(input),
-               case let cards = Self.deduplicated(InnerTubeParser.parseSearchPage(response, includeVideos: false)),
-               !cards.rows.isEmpty { return InnerTubeParser.SearchPage(rows: cards.rows, continuation: nil) }
-            return Self.deduplicated(InnerTubeParser.parseSearchPage(try await self.client.searchTypeahead(input), includeVideos: false))
+            Self.deduplicated(InnerTubeParser.parseSearchPage(try await self.client.searchTypeahead(input), includeVideos: false))
         }
     }
 
@@ -851,18 +831,4 @@ private actor RepositoryCaches {
     func storeAudioVersion(_ song: Song, for id: String) { audioVersions[id] = song }
     func videoVersion(_ id: String) -> VideoLookup? { videoVersions[id] }
     func storeVideoVersion(_ song: Song?, for id: String) { videoVersions[id] = VideoLookup(song: song) }
-
-    /// The latest input's suggestions request only: the field moves on one keystroke at a time.
-    private var suggestionCall: (input: String, task: Task<InnerTubeJSON, Error>)?
-
-    func suggestions(for input: String, fetch: @escaping @Sendable () async throws -> InnerTubeJSON) -> Task<InnerTubeJSON, Error> {
-        if let call = suggestionCall, call.input == input { return call.task }
-        let task = Task { try await fetch() }
-        suggestionCall = (input, task)
-        return task
-    }
-
-    func dropSuggestions(for input: String) {
-        if suggestionCall?.input == input { suggestionCall = nil }
-    }
 }

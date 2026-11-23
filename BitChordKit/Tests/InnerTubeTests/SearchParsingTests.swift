@@ -617,13 +617,6 @@ final class SearchParsingTests: XCTestCase {
         )
     }
 
-    // Android 25841a57: the rows under the query strings are the dropdown's live cards.
-    func testSuggestionsFixtureAlsoCarriesLiveCards() throws {
-        let page = InnerTubeParser.parseSearchPage(try Fixtures.json("search_suggestions.json"), includeVideos: false)
-        XCTAssertFalse(page.rows.isEmpty)
-        XCTAssertNil(page.continuation)
-    }
-
     func testSuggestionsFallBackToDisplayRunsAndDeduplicate() {
         let response = json(#"""
         {"contents":[

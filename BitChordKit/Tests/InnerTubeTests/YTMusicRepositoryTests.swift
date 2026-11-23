@@ -198,6 +198,20 @@ final class YTMusicRepositoryTests: XCTestCase {
         XCTAssertNil(request.value(forHTTPHeaderField: "Cookie"))
     }
 
+    /// Android 25841a57: the signed-in suggestions carry cards, so no search is sent, and the
+    /// completions and the cards for one input share a single suggestions request.
+    func testTypeaheadCardsComeFromTheSharedSuggestionsRequest() async throws {
+        try await signIn()
+        try stub.on("music/get_search_suggestions", fixture: "search_suggestions.json")
+        async let completions = repository.searchSuggestions(input: "daft p")
+        async let cards = repository.searchTypeahead(input: "daft p")
+        let (texts, page) = try await (completions, cards)
+        XCTAssertEqual(texts.first, "daft punk")
+        XCTAssertFalse(page.rows.isEmpty)
+        XCTAssertEqual(stub.requests(to: "music/get_search_suggestions").count, 1)
+        XCTAssertTrue(stub.requests(to: "search").isEmpty)
+    }
+
     // MARK: - Pages
 
     func testAnAlbumReadsItsTracksFromTheBackingPlaylistAndItsHeaderFromItself() async throws {

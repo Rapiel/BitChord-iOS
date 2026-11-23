@@ -786,6 +786,20 @@ final class SourceResolverTests: XCTestCase {
         XCTAssertLessThan(Date().timeIntervalSince(started), 2)
     }
 
+    /// The first-ranked addon spends the whole budget; the second answered FLAC at once. Reading
+    /// them in rank order must not let the spent clock throw that FLAC away.
+    @MainActor
+    func testADownloadOutOfTimeKeepsALowerRankedFlacThatAlreadyLanded() async throws {
+        let slow = FakeSource("first", after: 5_000, format: StreamFormat(codec: "flac"), kind: .addon)
+        let quick = FakeSource("second", after: 0, format: StreamFormat(codec: "flac"), kind: .addon)
+        let (resolver, registry) = resolver([slow, quick])
+        seed(registry, [slow, quick])
+        let started = Date()
+        let stream = try await resolver.forDownload(raceTarget(), request: .download(.lossless), budget: 0.3)
+        XCTAssertEqual(stream?.sourceConfigId, "second")
+        XCTAssertLessThan(Date().timeIntervalSince(started), 2)
+    }
+
     @MainActor
     func testADownloadFallsToYouTubeWhenNothingBeatsItsAac() async throws {
         let thin = FakeSource("jio", after: 0, format: StreamFormat(codec: "mp4", kbps: 160), kind: .jioSaavn)

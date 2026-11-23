@@ -34,7 +34,7 @@ public final class AppSettings {
     nonisolated public static let defaultAudioCacheLimitBytes: Int64 = 512 * 1_024 * 1_024
     nonisolated public static let maxAudioCacheLimitBytes: Int64 = 10 * 1_024 * 1_024 * 1_024
     nonisolated public static let lyricsOffsetRangeMs: ClosedRange<Int> = -5_000...5_000
-    nonisolated public static let defaultUpgradeLengthSlackSeconds = 3
+    nonisolated public static let defaultUpgradeLengthSlackSeconds = 5
     nonisolated public static let upgradeLengthSlackRange: ClosedRange<Int> = 0...10
     /// PORTING: crossfade 0–12 s.
     nonisolated public static let crossfadeRange: ClosedRange<Int> = 0...12

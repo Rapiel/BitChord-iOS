@@ -490,16 +490,27 @@ public final class SourceResolver: StreamResolving, @unchecked Sendable {
         // Every bit-exact source asked at once, then read in rank order: walked one at a time a slow
         // first addon spent the whole budget, and raced a quicker FLAC from a lower rank would win.
         let runs = bitExact.map { source in
-            (source, Task { try await self.matchAndStream(source, target, request.tier, waitForAll: true, strictLength: strictLength) })
+            let landed = LandedAnswer()
+            return (source, landed, Task {
+                let stream = try await self.matchAndStream(source, target, request.tier, waitForAll: true, strictLength: strictLength)
+                landed.set(stream)
+                return stream
+            })
         }
-        defer { runs.forEach { $0.1.cancel() } }
+        defer { runs.forEach { $0.2.cancel() } }
         var best: (MusicSource, ResolvedStream)?
-        for (source, run) in runs {
-            let answer: ResolvedStream??
+        for (source, landed, run) in runs {
+            var answer: ResolvedStream??
             if let deadline {
                 let left = max(0, ContinuousClock.now.duration(to: deadline) / .seconds(1))
                 answer = try await withTimeout(left) { try await run.value }
-                if answer == nil { SourcesLog.w("\(source.displayName) ran out of download lookup time") }
+                // A source that already finished can still lose withTimeout's race against a spent
+                // clock; what it landed is read here instead of being thrown away.
+                if answer == nil { answer = landed.value }
+                if answer == nil {
+                    run.cancel()
+                    SourcesLog.w("\(source.displayName) ran out of download lookup time")
+                }
             } else {
                 answer = try await run.value
             }
@@ -942,6 +953,22 @@ public final class SourceResolver: StreamResolving, @unchecked Sendable {
     static let substituteTimeout: TimeInterval = 20
     /// Android `Downloads.SOURCE_LOOKUP_MS`.
     static let downloadLookupTimeout: TimeInterval = 60
+}
+
+/// What one bit-exact lookup in `forDownload` returned, once it has; nil while still running.
+private final class LandedAnswer: @unchecked Sendable {
+    private let lock = NSLock()
+    private var stream: ResolvedStream??
+
+    func set(_ answer: ResolvedStream?) {
+        lock.lock(); defer { lock.unlock() }
+        stream = .some(answer)
+    }
+
+    var value: ResolvedStream?? {
+        lock.lock(); defer { lock.unlock() }
+        return stream
+    }
 }
 
 /// The first bit-exact copy a High-rung download refused, kept for when nothing lossy beats YouTube.

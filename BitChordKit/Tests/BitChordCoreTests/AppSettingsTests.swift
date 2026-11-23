@@ -33,7 +33,7 @@ final class AppSettingsTests: XCTestCase {
         XCTAssertEqual(s.audioQualityCellular, .lossless)
         XCTAssertEqual(s.downloadQuality, .lossless)
         XCTAssertTrue(s.wifiOnlyDownloads)
-        XCTAssertEqual(s.upgradeLengthSlackSeconds, 3)
+        XCTAssertEqual(s.upgradeLengthSlackSeconds, 5)
         XCTAssertEqual(s.crossfadeSeconds, 0)
         XCTAssertFalse(s.smartFadeEnabled)
         XCTAssertEqual(s.automixPerformanceMode, .balanced)

@@ -103329,103 +103329,103 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Eine größere Toleranz akzeptiert mehr Treffer aus Quellen, eine kleinere ist strenger. Standard sind 3 Sekunden."
+            "value" : "Eine größere Toleranz akzeptiert mehr Treffer aus Quellen, eine kleinere ist strenger. Standard sind 5 Sekunden."
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "A larger tolerance accepts more source matches; a smaller tolerance is stricter. The default is 3 seconds."
+            "value" : "A larger tolerance accepts more source matches; a smaller tolerance is stricter. The default is 5 seconds."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Una tolerancia mayor acepta más coincidencias de fuentes; una menor es más estricta. El valor predeterminado es 3 segundos."
+            "value" : "Una tolerancia mayor acepta más coincidencias de fuentes; una menor es más estricta. El valor predeterminado es 5 segundos."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Une tolérance plus large accepte plus de correspondances ; une tolérance plus faible est plus stricte. La valeur par défaut est de 3 secondes."
+            "value" : "Une tolérance plus large accepte plus de correspondances ; une tolérance plus faible est plus stricte. La valeur par défaut est de 5 secondes."
           }
         },
         "he" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "סבילות גדולה יותר מקבלת יותר התאמות ממקורות; סבילות קטנה יותר מחמירה יותר. ברירת המחדל היא 3 שניות."
+            "value" : "סבילות גדולה יותר מקבלת יותר התאמות ממקורות; סבילות קטנה יותר מחמירה יותר. ברירת המחדל היא 5 שניות."
           }
         },
         "hi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ज़्यादा छूट से ज़्यादा स्रोत मिलान स्वीकार होते हैं; कम छूट ज़्यादा सख़्त है। डिफ़ॉल्ट 3 सेकंड है।"
+            "value" : "ज़्यादा छूट से ज़्यादा स्रोत मिलान स्वीकार होते हैं; कम छूट ज़्यादा सख़्त है। डिफ़ॉल्ट 5 सेकंड है।"
           }
         },
         "id" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Toleransi lebih besar menerima lebih banyak kecocokan sumber; toleransi lebih kecil lebih ketat. Bawaannya 3 detik."
+            "value" : "Toleransi lebih besar menerima lebih banyak kecocokan sumber; toleransi lebih kecil lebih ketat. Bawaannya 5 detik."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Una tolleranza più ampia accetta più corrispondenze; una più stretta è più severa. Il valore predefinito è 3 secondi."
+            "value" : "Una tolleranza più ampia accetta più corrispondenze; una più stretta è più severa. Il valore predefinito è 5 secondi."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "許容差を大きくするとソースの一致が増え、小さくすると厳しくなります。既定値は3秒です。"
+            "value" : "許容差を大きくするとソースの一致が増え、小さくすると厳しくなります。既定値は5秒です。"
           }
         },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Większa tolerancja akceptuje więcej dopasowań ze źródeł; mniejsza jest bardziej rygorystyczna. Domyślnie 3 sekundy."
+            "value" : "Większa tolerancja akceptuje więcej dopasowań ze źródeł; mniejsza jest bardziej rygorystyczna. Domyślnie 5 sekund."
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Uma tolerância maior aceita mais correspondências; uma menor é mais rigorosa. O padrão é 3 segundos."
+            "value" : "Uma tolerância maior aceita mais correspondências; uma menor é mais rigorosa. O padrão é 5 segundos."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Больший допуск принимает больше совпадений из источников; меньший — строже. По умолчанию 3 секунды."
+            "value" : "Больший допуск принимает больше совпадений из источников; меньший — строже. По умолчанию 5 секунд."
           }
         },
         "th" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ค่าคลาดเคลื่อนที่มากขึ้นจะยอมรับการจับคู่ได้มากขึ้น ค่าที่น้อยลงจะเข้มงวดกว่า ค่าเริ่มต้นคือ 3 วินาที"
+            "value" : "ค่าคลาดเคลื่อนที่มากขึ้นจะยอมรับการจับคู่ได้มากขึ้น ค่าที่น้อยลงจะเข้มงวดกว่า ค่าเริ่มต้นคือ 5 วินาที"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Daha büyük tolerans daha fazla kaynak eşleşmesi kabul eder; daha küçük tolerans daha katıdır. Varsayılan 3 saniyedir."
+            "value" : "Daha büyük tolerans daha fazla kaynak eşleşmesi kabul eder; daha küçük tolerans daha katıdır. Varsayılan 5 saniyedir."
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Dung sai lớn hơn chấp nhận nhiều kết quả khớp hơn; dung sai nhỏ hơn sẽ chặt chẽ hơn. Mặc định là 3 giây."
+            "value" : "Dung sai lớn hơn chấp nhận nhiều kết quả khớp hơn; dung sai nhỏ hơn sẽ chặt chẽ hơn. Mặc định là 5 giây."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "容差越大，接受的来源匹配越多；容差越小则越严格。默认为 3 秒。"
+            "value" : "容差越大，接受的来源匹配越多；容差越小则越严格。默认为 5 秒。"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "A larger tolerance accepts more source matches; a smaller tolerance is stricter. The default is 3 seconds."
+            "value" : "A larger tolerance accepts more source matches; a smaller tolerance is stricter. The default is 5 seconds."
           }
         }
       }

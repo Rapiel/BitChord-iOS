@@ -515,6 +515,8 @@ signing_in	로그인 중…
 skip_silence	무음 구간 건너뛰기
 skip_silence_subtitle	곡 앞뒤의 긴 무음 구간을 건너뜁니다
 sleep_timer	취침 타이머
+sleep_timer_fade_out	일시정지 전 페이드 아웃
+sleep_timer_fade_out_subtitle	마지막 30초 동안 볼륨을 서서히 줄입니다
 smart_version_alignment	음원 버전 타이밍 맞추기
 smart_version_alignment_subtitle	다른 음원으로 전환할 때 도입부와 재생 위치를 맞춥니다
 smb	SMB

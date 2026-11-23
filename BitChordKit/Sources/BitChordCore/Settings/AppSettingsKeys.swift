@@ -19,6 +19,7 @@ extension AppSettings {
         case smartFadeEnabled = "smart_fade_enabled"
         case automixPerformanceMode = "automix_performance_mode"
         case skipSilence = "skip_silence"
+        case sleepTimerFadeOut = "sleep_timer_fade_out"
         case loudnessNormalization = "loudness_normalization"
         case dolbyAtmos = "dolby_atmos"
         /// Android's on/off switch for "Direct source stream" (on is Always). Still written beside

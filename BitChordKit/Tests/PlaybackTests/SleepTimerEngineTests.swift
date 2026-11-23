@@ -6,6 +6,58 @@ import XCTest
 /// playing now (port of `SleepTimer` and the service's `watchSleepTimer` / "sleep after this song").
 @MainActor
 final class SleepTimerEngineTests: EngineTestCase {
+    /// Android d4817fcc's SleepTimerTest: full volume until the last 30 s, then linear to silence.
+    func testTheFadeVolumeIsLinearOverTheLastThirtySeconds() {
+        XCTAssertEqual(SleepTimerState.fadeVolume(remaining: 60, enabled: true), 1)
+        XCTAssertEqual(SleepTimerState.fadeVolume(remaining: 30, enabled: true), 1)
+        XCTAssertEqual(SleepTimerState.fadeVolume(remaining: 15, enabled: true), 0.5, accuracy: 1e-6)
+        XCTAssertEqual(SleepTimerState.fadeVolume(remaining: 3, enabled: true), 0.1, accuracy: 1e-6)
+        XCTAssertEqual(SleepTimerState.fadeVolume(remaining: 0, enabled: true), 0)
+        XCTAssertEqual(SleepTimerState.fadeVolume(remaining: -1, enabled: true), 0)
+        XCTAssertEqual(SleepTimerState.fadeVolume(remaining: 5, enabled: false), 1, "off: no fade")
+    }
+
+    func testATimedSleepFadesTheDeckDownAndHandsItBackAtFullVolume() async throws {
+        let item = try tone(8, name: "sleep-timed-fade")
+        let h = harness(queue: [item])
+        h.engine.load(item, playWhenReady: true)
+        await waitUntil("playing") { h.engine.isPlaying }
+        let deck = h.engine.activeDeckID
+
+        h.engine.startSleepTimer(.duration(2))
+        await waitUntil("quieter", timeout: 2) { h.engine.deck(deck).volume < 0.2 }
+        await waitUntil("paused by the timer", timeout: 3) { !h.engine.playWhenReady }
+        XCTAssertEqual(h.engine.deck(deck).volume, 1, "the deck is handed back at full volume for next time")
+    }
+
+    func testCancellingMidFadeRestoresTheVolume() async throws {
+        let item = try tone(8, name: "sleep-fade-cancel")
+        let h = harness(queue: [item])
+        h.engine.load(item, playWhenReady: true)
+        await waitUntil("playing") { h.engine.isPlaying }
+        let deck = h.engine.activeDeckID
+
+        h.engine.startSleepTimer(.duration(5))
+        await waitUntil("quieter", timeout: 2) { h.engine.deck(deck).volume < 0.8 }
+        h.engine.cancelSleepTimer()
+        XCTAssertEqual(h.engine.deck(deck).volume, 1)
+        XCTAssertTrue(h.engine.playWhenReady)
+    }
+
+    func testWithTheFadeOffTheVolumeStaysFull() async throws {
+        let item = try tone(6, name: "sleep-no-fade")
+        let h = harness(queue: [item])
+        h.engine.sleepTimerFadeOut = false
+        h.engine.load(item, playWhenReady: true)
+        await waitUntil("playing") { h.engine.isPlaying }
+        let deck = h.engine.activeDeckID
+
+        h.engine.startSleepTimer(.duration(1))
+        await pause(for: 0.5)
+        XCTAssertEqual(h.engine.deck(deck).volume, 1)
+        await waitUntil("paused by the timer", timeout: 3) { !h.engine.playWhenReady }
+    }
+
     func testTheTimerPausesAtItsDeadline() async throws {
         let item = try tone(6, name: "sleep-deadline")
         let h = harness(queue: [item])

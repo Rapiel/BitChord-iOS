@@ -233,6 +233,9 @@ struct SettingsScreen: View {
             SettingsRow(symbol: "slider.horizontal.3", title: L10n.automixPerformance,
                         subtitle: L10n.automixPerformanceSubtitle,
                         value: settings.automixPerformanceMode.settingsLabel) { pickingAutomixPerformance = true }
+        case .sleepTimerFadeOut:
+            SettingsToggleRow(symbol: "moon.zzz.fill", title: L10n.sleepTimerFadeOut,
+                              subtitle: L10n.sleepTimerFadeOutSubtitle, isOn: $settings.sleepTimerFadeOut)
         case .skipSilence:
             // Android explains that silence skipping does nothing on its float output branch; on
             // iOS the detector runs in the app's own tap, so the plain subtitle is always true.

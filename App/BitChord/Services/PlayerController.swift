@@ -1071,6 +1071,9 @@ final class PlayerController {
         trackers.append(ChangeTracker.track({ settings.skipSilence }) { [weak self] on in
             self?.engine.skipSilence = on
         })
+        trackers.append(ChangeTracker.track({ settings.sleepTimerFadeOut }) { [weak self] on in
+            self?.engine.sleepTimerFadeOut = on
+        })
         trackers.append(ChangeTracker.track({ settings.playbackSpeed }) { [weak self] speed in
             self?.engine.rate = speed
         })

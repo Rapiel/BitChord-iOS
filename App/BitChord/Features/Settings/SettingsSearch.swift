@@ -49,7 +49,7 @@ enum SettingsRowID: String, CaseIterable, Hashable {
     case downloadQuality, downloadWifiOnly
     // Playback
     case preferMusicOnly, loudnessNormalization, crossfade, automix, automixPerformance, skipSilence,
-         spatialAudio, equalizer
+         sleepTimerFadeOut, spatialAudio, equalizer
     // Appearance
     case theme, reduceAnimation, reduceDynamicBlur, fullScreenCoverArt, legacyMeshGradient,
          animatedCoverArt, animatedCoverCellular, spotifyCanvas, syncedLyrics, lyricsBlur,
@@ -124,6 +124,7 @@ enum SettingsCatalog {
             row(.automix, L10n.automix, "crossfade", "smart fade", "mix"),
             row(.automixPerformance, L10n.automixPerformance, "cpu", "battery"),
             row(.skipSilence, L10n.skipSilence, "silence"),
+            row(.sleepTimerFadeOut, L10n.sleepTimerFadeOut, "sleep timer", "fade", "취침 타이머", "페이드"),
             row(.spatialAudio, L10n.spatialAudio, "surround", "3d"),
             row(.equalizer, L10n.equalizer, "eq", "bass", "treble"),
         ]

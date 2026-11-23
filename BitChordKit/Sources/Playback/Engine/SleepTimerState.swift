@@ -37,6 +37,18 @@ public struct SleepTimerState: Hashable, Sendable {
         self.afterTrack = afterTrack
     }
 
+    /// How long before a timed sleep the volume starts coming down, as on Android.
+    public static let fadeOutDuration: TimeInterval = 30
+
+    /// The volume `remaining` seconds before the deadline: full until the fade starts, then a
+    /// straight line to silence (Android's `SleepTimer.calculateFadeVolume`).
+    public static func fadeVolume(remaining: TimeInterval, fadeDuration: TimeInterval = fadeOutDuration,
+                                  enabled: Bool) -> Float {
+        guard enabled, fadeDuration > 0, remaining < fadeDuration else { return 1 }
+        guard remaining > 0 else { return 0 }
+        return Float(remaining / fadeDuration)
+    }
+
     /// How long is left at `now`, never negative; nil for end-of-track.
     public func remaining(at now: TimeInterval) -> TimeInterval? {
         deadline.map { max($0 - now, 0) }

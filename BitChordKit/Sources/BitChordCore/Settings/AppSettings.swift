@@ -124,6 +124,11 @@ public final class AppSettings {
         didSet { write(.skipSilence, skipSilence) }
     }
 
+    /// Fade the last 30 seconds before a timed sleep pauses playback. On by default, as on Android.
+    public var sleepTimerFadeOut: Bool = true {
+        didSet { write(.sleepTimerFadeOut, sleepTimerFadeOut) }
+    }
+
     /// Level every track to the same loudness using YouTube's per-track loudness figure
     /// (``ResolvedStream/loudnessDb``). On by default: a queue drawn from several sources spans
     /// mastering eras fifteen decibels apart. It is still a gain, so the audio pipeline readout
@@ -939,6 +944,7 @@ public final class AppSettings {
         smartFadeEnabled = readBool(.smartFadeEnabled, default: false)
         automixPerformanceMode = readEnum(.automixPerformanceMode, default: .balanced)
         skipSilence = readBool(.skipSilence, default: false)
+        sleepTimerFadeOut = readBool(.sleepTimerFadeOut, default: true)
         loudnessNormalization = readBool(.loudnessNormalization, default: true)
         dolbyAtmos = readBool(.dolbyAtmos, default: true)
         migrateDirectSourceStream()

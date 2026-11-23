@@ -342,6 +342,7 @@ struct SleepTimerPicker: View {
     let onBack: () -> Void
 
     @Environment(PlayerController.self) private var player
+    @Environment(AppSettings.self) private var settings
 
     var body: some View {
         let timer = player.sleepTimer
@@ -356,6 +357,8 @@ struct SleepTimerPicker: View {
             ForEach(SleepTimerRequest.presetMinutes, id: \.self) { minutes in
                 presetOption(minutes, timer: timer)
             }
+            SheetDivider(color: divider)
+            fadeOutToggle
             if timer != nil {
                 SheetActionRow(symbol: AppSymbol.close, label: L10n.turnOffTimer, accent: accent, identifier: "sleepTimer.off") {
                     player.cancelSleepTimer()
@@ -365,6 +368,21 @@ struct SleepTimerPicker: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("sheet.sleepTimer")
+    }
+
+    /// Android's fade-out switch in the same menu; it applies from the next timer set.
+    private var fadeOutToggle: some View {
+        @Bindable var settings = settings
+        return Toggle(isOn: $settings.sleepTimerFadeOut) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(L10n.sleepTimerFadeOut).font(CollectionsType.body)
+                Text(L10n.sleepTimerFadeOutSubtitle).font(.footnote).foregroundStyle(.secondary)
+            }
+        }
+        .tint(accent)
+        .padding(.horizontal, 22)
+        .padding(.vertical, 12)
+        .accessibilityIdentifier("sleepTimer.fadeOut")
     }
 
     private func subtitle(_ timer: SleepTimerState?) -> String {

@@ -232,6 +232,10 @@ public final class AudioPlayerEngine {
     @ObservationIgnored var armTask: Task<Void, Never>?
     @ObservationIgnored var statsTask: Task<Void, Never>?
     @ObservationIgnored var sleepTask: Task<Void, Never>?
+    /// The sleep timer's last-30-seconds fade has turned the session deck down.
+    @ObservationIgnored var sleepFadeApplied = false
+    /// Fade the last 30 s before a timed sleep (Android's `sleep_timer_fade_out`, on by default).
+    @ObservationIgnored public var sleepTimerFadeOut = true
     @ObservationIgnored var tickerTask: Task<Void, Never>?
     @ObservationIgnored var samplerTask: Task<Void, Never>?
     @ObservationIgnored var openedAudio: [String: OpenedAudio] = [:]
@@ -532,6 +536,7 @@ public final class AudioPlayerEngine {
         sleepTask?.cancel()
         sleepTask = nil
         sleepTimer = nil
+        setSleepFadeGain(1)
         updateAdvancePolicy()
         crossfade.onSleepTimerCleared()
     }
@@ -544,14 +549,30 @@ public final class AudioPlayerEngine {
 
     private func scheduleSleep(at deadline: TimeInterval) {
         let clock = self.clock
+        let fades = sleepTimerFadeOut
         sleepTask = Task { [weak self] in
-            let wait = deadline - clock.now
+            let wait = deadline - (fades ? SleepTimerState.fadeOutDuration : 0) - clock.now
             if wait > 0 { try? await Task.sleep(for: .seconds(wait)) }
+            // The last stretch: turned down every 100 ms, as Android's watchSleepTimer does.
+            while fades, !Task.isCancelled, let engine = self, engine.sleepTimer?.deadline == deadline,
+                  clock.now < deadline {
+                engine.setSleepFadeGain(SleepTimerState.fadeVolume(remaining: deadline - clock.now, enabled: true))
+                try? await Task.sleep(for: .milliseconds(100))
+            }
             guard !Task.isCancelled, let self, self.sleepTimer?.deadline == deadline else { return }
             PlaybackLog.info("sleep timer ran out; pausing", about: self.currentItem?.trackID)
             self.pause()
             self.cancelSleepTimer()
         }
+    }
+
+    /// Turns the session deck to `gain` for the sleep fade. A crossfade, Automix blend or quality
+    /// swap owns the deck volumes while it runs, so the fade sits out until it is over.
+    private func setSleepFadeGain(_ gain: Float) {
+        guard gain < 1 || sleepFadeApplied else { return }
+        guard !crossfade.isTransitioning, swapTask == nil else { return }
+        active.volume = gain
+        sleepFadeApplied = gain < 1
     }
 
     // MARK: - Settings application

@@ -1592,6 +1592,10 @@ enum L10n {
     static var skipSilenceSubtitle: String { tr("skip_silence_subtitle") }
     /// Sleep timer
     static var sleepTimer: String { tr("sleep_timer") }
+    /// Fade out before pausing
+    static var sleepTimerFadeOut: String { tr("sleep_timer_fade_out") }
+    /// Gradually lowers volume over the last 30 seconds
+    static var sleepTimerFadeOutSubtitle: String { tr("sleep_timer_fade_out_subtitle") }
     /// Smart audio alignment
     static var smartVersionAlignment: String { tr("smart_version_alignment") }
     /// Analyze audio waveforms to match the exact corresponding playback moment
